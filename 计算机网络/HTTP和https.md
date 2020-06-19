@@ -256,11 +256,14 @@ CA用于颁发证书。CA会生成一个将对应身份和公钥以及ip绑定�
 #### GET, POST
 
 - 从REST角度，GET是幂等，而POST不是
-- 从请求参数，GET在URL之后，POST在请求体内。
-- GET受限于url长度，post没有
+- 从请求参数，GET在URL之后通过urlencode编码，POST在请求体内多种编码方式。
+- GET受限于url长度（不同浏览器不一样，如果是服务器当然没区别），post没有
 - get用于获取资源，post用于更新
+- get会产生一个tcp数据包；而post两个：先发首部，再发数据。（通过客户端发送100continue确认服务器端能否支持大数据）
 
-GET请求会对参数进行url编码，防止当value中出现相同的&。
+url编码，防止当value中出现相同的&。
+
+https://www.sohu.com/a/353926375_468635
 
 #### status
 
@@ -289,4 +292,12 @@ GET请求会对参数进行url编码，防止当value中出现相同的&。
 503:暂时不可用。
 
 
+
+#### HTTP1.1
+
+
+
+- 长连接，connection：keep-alive
+
+- host首部，以前认为每台服务器绑定唯一ip，因此url不包括主机名。；但现在一台服务器多个虚拟主机，共享ip。因此加了HOST。如果没有HOST会报一个400错误。
 

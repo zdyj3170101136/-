@@ -402,3 +402,24 @@ https://blog.csdn.net/tiandijun/article/details/41961785
 
   四元组来唯一标识一个TCP连接：{local ip，本地端口，远程ip，远程端口}，最大tcp连接为客户端ip数×客户端端口数，对IPV4，不考虑ip地址分类等因素，最大tcp连接数大约2 ^ 32（ip数）* 2 ^ 16（端口数）
 
+#### Nigle
+
+对于大于MSS的数据直接发送。
+
+如果仍然有未确认的数据，将当前数据塞进缓冲区。
+
+（最多一个未被确认）
+
+https://blog.csdn.net/sinat_35261315/article/details/79392116?utm_medium=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromMachineLearnPai2-1.nonecase&depth_1-utm_source=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromMachineLearnPai2-1.nonecase
+
+#### 延迟确认
+
+一个报文到达，不会立马回复ack；
+
+而是会延迟回复，希望顺便能将数据和ack一起回复。
+
+（只能延迟单个，如果有两个延续的报文则还是得回答）
+
+https://www.cnblogs.com/zhangkele/p/10080845.html
+
+如果nagle和延迟确认混在一起会很麻烦。
