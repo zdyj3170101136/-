@@ -265,6 +265,12 @@ url编码，防止当value中出现相同的&。
 
 https://www.sohu.com/a/353926375_468635
 
+
+
+PUT 上传资源
+
+Delete 更新
+
 #### status
 
 200 oK：请求成功处理
