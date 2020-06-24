@@ -299,11 +299,31 @@ Delete 更新
 
 
 
-#### HTTP1.1
+#### HTTP1.1和1.0区别
 
 
 
 - 长连接，connection：keep-alive
-
 - host首部，以前认为每台服务器绑定唯一ip，因此url不包括主机名。；但现在一台服务器多个虚拟主机，共享ip。因此加了HOST。如果没有HOST会报一个400错误。
+- 缓存，之前的话使用if-modified-since来做为缓存标砖；现在主要增加了etag来判断和if -math
+- 新状态，410表示服务器资源被永久性删除
 
+#### http1.1和http2.0的区别
+
+- http2.0可以多路复用，一个tcp请求同时处理多个连接。
+
+（由于tcp慢启动，所以对于短时性的http连接变得十分低小）
+
+- 头部数据压缩。使用算法对header部分进行压缩。
+
+（静态字典，直接对每个字段用对应的数字表示）
+
+- 服务器推送，服务器可以直接把数据推送给客户端
+
+
+
+https://blog.csdn.net/ailunlee/article/details/97831912
+
+- http2通过把http的数据分为frame 
+
+https://blog.csdn.net/striveb/article/details/84230923?utm_medium=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromMachineLearnPai2-1.nonecase&depth_1-utm_source=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromMachineLearnPai2-1.nonecase

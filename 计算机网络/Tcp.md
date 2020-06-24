@@ -80,7 +80,7 @@ TimeoutiNterval = EstimatedRtt + 4 * DEVRTT
 
 #### tcp_retries
 
-Tcp_retries1: 3,超过这个次数，就会更新路由缓存，然后mtu探测（底层链路层可能使用小于MTU）
+Tcp_retries1: 3,超过这个次数，就会更新路由缓存(下一跳缓存)，然后mtu探测（底层链路层可能使用小于MTU）
 
 tcp_retries2:15,超过这个次数就放弃重传。
 
@@ -108,7 +108,7 @@ tcp_retries2:15,超过这个次数就放弃重传。
 
 http://perthcharles.github.io/2015/09/07/wiki-tcp-retries/
 
-
+https://segmentfault.com/a/1190000020183650
 
 #### 比特差错的信道
 
@@ -154,6 +154,17 @@ http://perthcharles.github.io/2015/09/07/wiki-tcp-retries/
 
 对每一个发送数据开启一个定时器，超时则重传。
 
+
+
+#### 可靠传输
+
+- 数据校验检查比特错误
+- 肯定确认和重传机制应对模糊不清的ack
+- 序号解决重传导致的重复分组问题
+- 使用定时器的超时重传机制解决数据丢失问题
+- 数据切片
+- 对ip数据报重新排序保存数据正确性
+
 #### 流水线传输
 
 发送多个分组无需等待确认。
@@ -180,7 +191,7 @@ TIMOUOUTINTERVAL * 2次倍增，为了防止路由器泛洪。
 
 #### 为什么需要三次握手
 
-发送方发送SYN了， 初始序列号， 进入SYNC_SEND；接受方发送SYN， ACK， 进入SYNC_ECVD， 自己的初始序列号，发送方序列号 + ！；接收方发送ACK进入ESTABLISH,发送方发送ACK也进入ESTABLISH（并且携带数据）。
+发送方发送SYN了， 初始序列号， 进入SYNC_SEND；接受方（LISTEN）发送SYN， ACK， 进入SYNC_ECVD， 自己的初始序列号，发送方序列号 + ！；接收方发送ACK进入ESTABLISH,发送方发送ACK也进入ESTABLISH（并且携带数据）。
 
 1) A --> B SYN my sequence number is X 2) A <-- B ACK your sequence number is X 3) A <-- B SYN my sequence number is Y 4) A --> B ACK your sequence number is Y
 
@@ -285,6 +296,12 @@ FINZ_WAIT_2状态关闭发送，只能接受。半关闭。
 #### TIME_WAIT：
 
 主动发送方等待两个2 * MSL（报文段最大生存时间），保证对方收到ACK，如果没有收到，则对方重发FIN，本地将会重发ACK)
+
+
+
+#### ttl
+
+ttl是ip字段，每经过一个路由器减1，为零则发送icmp报文通知主机
 
 #### 为什么需要四次挥手
 
@@ -404,11 +421,15 @@ https://blog.csdn.net/tiandijun/article/details/41961785
 
 #### Nigle
 
+避免网络中充斥着大量的小型数据包
+
+
+
 对于大于MSS的数据直接发送。
 
-如果仍然有未确认的数据，将当前数据塞进缓冲区。
+如果仍然有未确认的小数据包，将当前数据塞进缓冲区。
 
-（最多一个未被确认）
+（最多一个未被确认的小数据包）
 
 https://blog.csdn.net/sinat_35261315/article/details/79392116?utm_medium=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromMachineLearnPai2-1.nonecase&depth_1-utm_source=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromMachineLearnPai2-1.nonecase
 
@@ -423,3 +444,10 @@ https://blog.csdn.net/sinat_35261315/article/details/79392116?utm_medium=distrib
 https://www.cnblogs.com/zhangkele/p/10080845.html
 
 如果nagle和延迟确认混在一起会很麻烦。
+
+
+
+- nagle发送一个，等待确认
+- 延迟回复方等待200ms超时后才会回复ack
+- 于是nagle又重新发送ack
+
