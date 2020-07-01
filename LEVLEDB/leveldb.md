@@ -2,6 +2,10 @@
 
 http://blog.itpub.net/31561269/viewspace-2375371/
 
+snappy不追求压缩率，压缩率够用的情况下，最快。。。
+
+https://leveldb-handbook.readthedocs.io/zh/latest/rwopt.html
+
 https://leveldb-handbook.readthedocs.io/zh/latest/rwopt.html
 
 为了增加读取效率，日志文件中按照block进行划分，每个block的大小为32KiB。每个block中包含了若干个完整的chunk。
@@ -453,3 +457,19 @@ http://huntinux.github.io/leveldb-skiplist.html
    0层的文件比较特殊。由于0层的文件中可能存在key重合的情况，因此在0层中，文件编号大的sstable优先查找。理由是文件编号较大的sstable中存储的总是最新的数据。
 
    非0层文件，一层中所有文件之间的key不重合，因此leveldb可以借助sstable的元数据（一个文件中最小与最大的key值）进行快速定位，每一层只需要查找一个sstable文件的内容。
+
+#### rocksdb
+
+RocksDB 
+
+- memtable也有bloon过滤器
+
+- 在0-1层使用snappy算法，之后使用zlib算法
+
+- 对于memtable 使用huge page（huge page不是4kb，而是几m）
+
+  更容易命中cache
+
+- 多个memtable，多个线程合并文件
+
+- 

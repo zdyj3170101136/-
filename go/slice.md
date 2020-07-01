@@ -40,4 +40,17 @@ copy使用memove移动
 
 防止切片频繁扩容导致的复制。
 
+func possibleBipartition() bool {
+
+	a := [...]int{3, 2, 1}
+
+	data := a
+	sort.Sort(sort.IntSlice(data[0:]))
+	fmt.Println(a)
+	return true
+}
+
+// [...]表示数组
+// 而[0:]表示生成切片，毕竟slice是生成切片的
+
 https://draveness.me/golang/docs/part2-foundation/ch03-datastructure/golang-array-and-slice/
