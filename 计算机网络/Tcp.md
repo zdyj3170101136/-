@@ -6,6 +6,12 @@ Transmission control protocol(运输控制协议)
 
 ![img](https://img-blog.csdn.net/20150428144449522?watermark/2/text/aHR0cDovL2Jsb2cuY3Nkbi5uZXQvbGlzaGVuZ2xvbmc2NjY=/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70/gravity/Center)
 
+虚线表示服务器，实现表示客户端。
+
+
+
+注意两边都能主动关闭，主动的变成fin_wait1状态，被动的变成close_wait状态
+
 #### 格式
 
 16位源端口号 ｜ 16位目的端口号
@@ -20,7 +26,58 @@ Transmission control protocol(运输控制协议)
 
 数据
 
+#### 校验和
 
+ip/tcp/udp校验和原理都是一样的。
+
+ip中的校验和只对ip首部。
+
+icmp覆盖整个icmp报文（icmp头部加数据）
+
+tcp/udp对整个tcp报文加上为首部校验。（udp检验和可选）
+
+
+
+仅用于差错检测，不用于恢复
+
+
+
+- 对报文每16位相加
+
+- 结果取反作为校验和（每个数取反相加结果和相加后取反结果一样，这样可以减少运算次数）
+- 校验时，把所有字节相加，包括检验和（最后都为1的话则通过）
+
+
+
+
+
+1000 + 0100 = 1100
+
+0111 + 1011 = 10010
+
+10010+ 01101 = 11111
+
+
+
+#### 实现
+
+使用一个32位的数，不断把它和16位的数相加。
+
+高16位保存进位。
+
+最后低16位和高16位相加。
+
+最后取反
+
+
+
+#### 为何用反吗
+
+计算校验和与字节序无关。
+
+https://blog.csdn.net/tangchenchan/article/details/51212440
+
+![截屏2020-07-09 下午5.12.51](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-09 下午5.12.51.png)
 
 #### MSS
 
@@ -154,8 +211,6 @@ https://segmentfault.com/a/1190000020183650
 
 对每一个发送数据开启一个定时器，超时则重传。
 
-
-
 #### 可靠传输
 
 - 数据校验检查比特错误
@@ -164,6 +219,8 @@ https://segmentfault.com/a/1190000020183650
 - 使用定时器的超时重传机制解决数据丢失问题
 - 数据切片
 - 对ip数据报重新排序保存数据正确性
+- 流量控制
+- 拥塞控制
 
 #### 流水线传输
 
@@ -172,6 +229,8 @@ https://segmentfault.com/a/1190000020183650
 - 增大序号范围，采用32bit的序号
 - 缓存分组，缓存已经发送但未确认的分组
 - 累积确认，确认号表示所有已经接受的。只重传一个，当超时发生时，只会重传超时的报文段。
+
+
 
 接收方对于重复的报文段重复确认，避免发送窗口无法移动。
 
@@ -184,10 +243,6 @@ https://segmentfault.com/a/1190000020183650
 rwnd动态更新。
 
 rwnd = 接收方应用最后一个读取的字节 - 缓存里头的字节。
-
-#### 拥塞控制
-
-TIMOUOUTINTERVAL * 2次倍增，为了防止路由器泛洪。
 
 #### 为什么需要三次握手
 
@@ -230,9 +285,17 @@ https://www.zhihu.com/question/24853633
 - 大时延可能会导致不必要的重传浪费带宽
 - 每个上游路由器用于转发分组的流量将会被浪费
 
+所以不能一次发送大量的包。
+
+
+
 拥塞窗口cwnd：发送方可发送字节数最大值。
 
+发送窗口取拥塞窗口和接收端窗口的最小值。
 
+
+
+![截屏2020-07-09 下午8.27.36](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-09 下午8.27.36.png)
 
 感知拥塞：
 
@@ -240,19 +303,19 @@ https://www.zhihu.com/question/24853633
 
 
 
-一，慢启动，初始时，cwnd的值为一个MSS值。每次收到传输报文段的首次确认就增加一个MSS。因此慢启动增长快，以指数的形式增长。
+一，慢启动，初始时，cwnd的值为一个MSS值。每次收到传输报文段的首次确认就增加一个MSS。因此慢启动增长快，以指数的形式增长。ssthresh位64kb。
 
 何时结束指数增长：
 
-- 接受到丢包时，设置cwnd为1，并且sstresh为cwnd的一半
+- 接受到丢包时，设置cwnd为1，并且sstresh为cwnd的一半（注意慢启动的丢包会重新导致进入慢启动状态）
 - 当到达sstresh时，结束慢启动进入拥塞避免阶段
-- 收到三个重复ack，执行快速重传（在定时器过期前重传报文），ssthresh等于一半的cwnd，将cwnd的值减半（然后加上3个MSS），进入快速恢复。
+- 收到三个重复ack，执行快速重传（在定时器过期前重传报文），ssthresh等于一半的cwnd，将cwnd的值减半（然后加上3个MSS（一定的余量）），进入快速恢复。
 
 
 
 二，拥塞避免，
 
-每个RTT只将cwnd增加一个MSS。
+每个RTT只将cwnd增加一个MSS。（通过对一个让rtt内发送的十个则一个ack只增长mss /10）
 
 - 当出现超时时，cwnd重新设置为1，ssthresh = 一半的cwnd，进入慢启动
 - 收到三个重复ack时，ssthresh等于一半的cwnd，将cwnd的值减半（然后加上3个MSS），进入快速恢复
@@ -263,11 +326,19 @@ https://www.zhihu.com/question/24853633
 
 tcp重传丢失的数据，如果只收到DUPACK，那么每个增加一个MSS。
 
-- 收到新的ack，cwnd = ssthresh，进入拥塞避免状态。
+- 收到新的ack，cwnd = ssthresh，进入拥塞避免状态。（从快速重传进入拥塞避免不用变为1，一个方便的）
 
 - 当超时发生，cwnd设置为1， ssthress设置为一半的cwnd，进入慢启动
 
-P179图
+
+
+所以本质上：
+
+超时进入慢启动
+
+三个重复ack进入快速重传
+
+新的ack从快速重传进入拥塞避免
 
 #### SACK
 
@@ -277,7 +348,13 @@ P179图
 
 #### 同时打开，同时关闭
 
-同时打开：两边同时发动SYN和SYNACK，建立了一条连接，交换了四个报文
+同时打开：两边同时发动SYN和SYNACK，建立了一条连接。
+
+同时进入sync_sent状态->接受到syn后发送syn和ack-》进入sync_rcvd状态->同时接受到syn和ack后进入establish状态
+
+![截屏2020-07-09 下午5.47.14](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-09 下午5.47.14.png)了四个报文
+
+![截屏2020-07-09 下午5.46.56](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-09 下午5.46.56.png)
 
 #### 关闭
 
@@ -295,9 +372,9 @@ FINZ_WAIT_2状态关闭发送，只能接受。半关闭。
 
 #### TIME_WAIT：
 
-主动发送方等待两个2 * MSL（报文段最大生存时间），保证对方收到ACK，如果没有收到，则对方重发FIN，本地将会重发ACK)
+主动发送方等待两个2 * MSL（报文段最大生存时间一个msl，2min），保证对方收到ACK，如果没有收到，则对方重发FIN，本地将会重发ACK)（大于ttl）
 
-
+https://blog.51cto.com/10706198/1775555
 
 #### ttl
 
@@ -322,21 +399,15 @@ ttl是ip字段，每经过一个路由器减1，为零则发送icmp报文通知�
 
 #### 同时关闭
 
-ESTABLISH发送一个FIN，同时接受到FIN，进入CLOSING状态-》接受到ACK-〉TIMEWAIT
+ESTABLISH发送一个FIN，同时接受到FIN。
 
-#### 状态图
-
-P168
-
-CLOSED-》发送syn进入SYN_SENT状态，接受SYN和ACK发送ACK后，进入ESTABLISH状态。
+Fin_wait_1-》进入CLOSING状态-》接受到ACK-〉TIMEWAIT
 
 #### KEEPALIVE
 
 即使连接双方无数据发送，也会每隔2h发送一个数据包。
 
 确保对方存活。
-
-
 
 #### RST
 
@@ -375,7 +446,11 @@ Nagle算法，将多次间隔较小，数据量较小的数据，合并发送。
 
 https://blog.csdn.net/tiandijun/article/details/41961785
 
+
+
 #### 糊涂窗口综合症
+
+流量控制实现不良
 
 接收方缓慢消耗，发送方缓慢产生数据都会导致这个问题。
 
@@ -383,9 +458,15 @@ https://blog.csdn.net/tiandijun/article/details/41961785
 
 最后可能不满一个报文，在几十到几百字节抖动。·
 
-- 延迟向发送方修改窗口大小，除非可以增加一个报文段大小。
+发送方：
 
-- 发送方只有当可以发送一个满的报文，或者至少是接收方一半大小的报文菜发送数据
+- 只能最多一个未被确认的小段（当数据包大小达到mss立即发送，）
+
+  https://blog.csdn.net/hzhsan/article/details/46429749
+
+接收方（clark）
+
+- 延迟向发送方修改窗口大小，除非可以增加一个报文段大小。或者接受缓存半空。
 
 #### CUBIC
 
@@ -450,4 +531,42 @@ https://www.cnblogs.com/zhangkele/p/10080845.html
 - nagle发送一个，等待确认
 - 延迟回复方等待200ms超时后才会回复ack
 - 于是nagle又重新发送ack
+
+#### bbr
+
+#### 丢包算法的缺陷
+
+- 高速尤其是无线网络，链路错误率很高的，不能认为丢包代表拥塞。
+- 丢包算法往往表示表示的是路由器缓存溢出，而路由器缓存溢出时候的速度不代表最快速度。
+
+
+
+![截屏2020-07-09 下午9.09.18](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-09 下午9.09.18.png)
+
+- RTprop：光信号从A端到B端的最小时延（其实是2倍时延，因为是一个来回，但不影响讨论），这取决于物理距离
+- BtlBw：在A到B的链路中，它的带宽取决于最慢的那段链路的带宽，称为瓶颈带宽，可以想象为光纤的粗细
+- BtlBufSize：在A到B的链路中，每个路由器都有自己的缓存，这些缓存的容量之和，称为瓶颈缓存大小
+- BDP：整条物理链路（不含路由器缓存）所能储藏的比特数据之和，BDP = BtlBw * RTprop
+
+#### 因此上半图
+
+- 当链路传输的数据没有超过（最慢的链路的带宽 * 光信号最短时延），传输速度在时延。
+- 之后，路由器开始启动缓存来存储比特数据，因此通过一个斜率增长
+- 当路由器缓存填满后，开始丢失数据。
+
+#### 下半图
+
+- 开始的时候传送速率单调增长
+- 到达链路极限带宽后不变。
+
+#### 四个状态
+
+![截屏2020-07-09 下午9.18.21](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-09 下午9.18.21.png)
+
+- 当连接建立，指数倍增发送速度，如果三次之后发现这个时间延迟不再增长，就说明管道被填满。
+- 排空：排空阶段，指数降低发送速率，将多占的两倍buffer慢慢排空。
+- 探测状态：不断尝试增大发送速率，看带宽是否还能增长，没有则降低排空多处来的包。
+- 延迟探测：每过10s，如果延迟不变，就延迟探测，这段时间只发送很少量的包，不占用缓存，看看最快在哪里。
+- https://blog.csdn.net/ebay/article/details/76252481
+- https://www.jianshu.com/p/08eab499415a
 
