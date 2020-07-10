@@ -64,6 +64,10 @@ vruntime = runtime （weight / 总weitht * 时间） * 1024 / weight
 
 
 
+优先级高的进程nice小，weight大。则相同的runtime的结果更小，增长慢。
+
+
+
 由于红黑树，需要一个比较时间。
 
 #### nice
@@ -100,6 +104,10 @@ weight根据nice值计算，weight = 1024 / 1.25 ^nice。
 
 
 
+当实时优先级不同的时候，FIFO和RR没有什么不同，只有在两个任务具有相同优先级的时候，我们才可以看出FIFO和RR之间的区别。对于FIFO调度器，最先进入runnable状态的任务将首先获取CPU资源，并且一直占用该资源，直到该进程进入睡眠状态。而对于RR调度器，具有相同优先级的任务将以轮流执行的方式共享处理器资源。当某个RR任务开始运行后，如果该任务不会阻塞，那么它将一直运行，直到分配给该任务的时间片到期。当时间片用完，调度器将把该任务放在任务链表的末端（注意，只有相同优先级的任务才会放到一个链表中，不同优先级在不同的链表中），并从任务链表中选择下一个任务去执行。
+
+
+
 DEADLINE：deadline调度器就是按照进程截止时间排序，调度它运行。
 
 period（每多少s必须运行一次的时间）
@@ -114,6 +122,10 @@ deadline（最后截止时间）
 
 
 
+
+
 - 会拒绝无法完成的deadline
 
   https://cloud.tencent.com/developer/article/1448416
+
+http://www.wowotech.net/process_management/447.html

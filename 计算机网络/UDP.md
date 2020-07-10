@@ -77,9 +77,86 @@ quic通过RAID5.
 
 https://www.jianshu.com/p/bb3eeb36b479
 
-#### 快速重启会话
+#### 拥塞控制
+
+在应用层实现了cubic，bbr等拥塞控制算法。
+
+改变容易。
+
+#### 可靠性
+
+使用单调递增的packet number。
+
+
+
+QUIC 同样是一个可靠的协议，它使用 Packet Number 代替了 TCP 的 sequence number，并且每个 Packet Number 都严格递增，也就是说就算 Packet N 丢失了，重传的 Packet N 的 Packet Number 已经不是 N，而是一个比 N 大的值。而 TCP 呢，重传 segment 的 sequence number 和原始的 segment 的 Sequence Number 保持不变，也正是由于这个特性，引入了 Tcp 重传的歧义问题。
+
+
+
+对于接受到的报文如果本应该是重传请求的响应，单计算成原始请求，那么rt过大。
+
+![截屏2020-07-10 下午3.10.38](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-10 下午3.10.38.png)
+
+#### packet通过重传stream offset来保持数据的有序性
+
+#### ![截屏2020-07-10 下午3.11.39](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-10 下午3.11.39.png)
+
+#### 不能丢弃已经接受的护具
+
+在tcp中，接受方丢弃已经接受的数据，考虑缓存溢出。
+
+但是quic不能。
+
+#### 更多的选择确认
+
+tcp通过sack实现了选择确认。
+
+但是由于首部option只有40个字节。
+
+
+
+但是范围小，最多四个段。
+
+quic就可以提供256个段。
+
+#### timestamp
+
+udp计算rtt的时候会减去acp delay。
+
+
+
+#### 没有对头阻塞问题。
+
+http2一个tcp多个连接。
+
+如果一个stream的阻塞了，全会阻塞。
+
+![截屏2020-07-10 下午3.49.11](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-10 下午3.49.11.png)但是quic不会。
+
+#### 速重启会话
 
 手机端的时候，如果网络改变会改变ip地址这时候tcp会话会重启。
 
 但是udp使用uuid标志连接，不惜要重新握手。
 
+任何一条 QUIC 连接不再以 IP 及端口四元组标识，而是以一个 64 位的随机数作为 ID 来标识，这样就算 IP 或者端口发生变化时，只要 ID 不变，这条连接依然维持着，上层业务逻辑感知不到变化，不会中断，也就不需要重连。
+
+#### 报文头部也有认证
+
+TCP 协议头部没有经过任何加密和认证，所以在传输过程中很容易被中间网络设备篡改，注入和窃听。比如修改序列号、滑动窗口。这些行为有可能是出于性能优化，也有可能是主动攻击。
+
+但是 QUIC 的 packet 可以说是武装到了牙齿。除了个别报文比如 PUBLIC_RESET 和 CHLO，所有报文头部都是经过认证的，报文 Body 都是经过加密的。
+
+https://zhuanlan.zhihu.com/p/32553477
+
+#### 流量控制
+
+quic的流量控制针对的是stream。
+
+类似tcp流量控制，接受端告诉发送端自己可以接受的字节数。
+
+但是不会因为，未ack的数据而对头阻塞。
+
+
+
+![截屏2020-07-10 下午3.50.26](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-10 下午3.50.26.png)

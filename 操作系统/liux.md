@@ -260,9 +260,16 @@ SIGHLD：告诉父进程自己已经被终止
 
   sigpipe当向一个已经关闭的进程发送信息，收到rst报文，收到sigpipe信号。
 
-  告诉此进程，默认是结束关闭
+  告诉此进程，默认是结束关闭（tcp）
 
   https://blog.csdn.net/z_ryan/article/details/80952498
+  
+- SIGSEGV（访问野指针，导致的内存退出。也就是没和page table关联的信号量）
+
+- ```
+  stop（暂停状态）（T）：SIGSTOP信号。SIGCONT恢复运行。
+  向父亲发送SIGCHLD让父亲来回收
+  ```
 
 ![截屏2020-07-08 下午3.55.37](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-08 下午3.55.37.png)
 

@@ -596,3 +596,30 @@ https://www.cnblogs.com/zhangkele/p/10080845.html
 - https://blog.csdn.net/ebay/article/details/76252481
 - https://www.jianshu.com/p/08eab499415a
 
+#### 由于tcp的重传机制
+
+发送端发送的时候记录时间戳。
+
+接受端回复ack时候使用发送端的时间戳。
+
+发送端收到tck后，用当前时刻 - ack中的time就能得到ett。
+
+https://perthcharles.github.io/2015/08/27/timestamp-intro/
+
+
+
+所以计算rtt不精确，通过timestamp精确计算rtt
+
+https://blog.csdn.net/u011130578/article/details/44918667?utm_medium=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromMachineLearnPai2-1.compare&depth_1-utm_source=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromMachineLearnPai2-1.compare
+
+
+
+序列号快速回绕。（使用同一个地址的nat两台机器时间不同步）
+
+由于tcp序列号32位且以字节计数。传送大数据时很快会绕过。
+
+难以发现这个是新的还是旧的数据。
+
+
+
+而时间戳就可以解决这个问题。
