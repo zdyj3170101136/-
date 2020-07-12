@@ -159,4 +159,4 @@ quic的流量控制针对的是stream。
 
 
 
-![截屏2020-07-10 下午3.50.26](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-10 下午3.50.26.png)
+![截屏2020-07-10 下午3.50.26](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-10 下午3.50.26.png
