@@ -3,15 +3,38 @@
 分为两个部分
 
 - 数据从设备缓冲区复制到内核缓冲区
-- 数据从内核缓冲区复制到用户空间
+- 数据从内核缓冲区复制到用户空间![截屏2020-07-15 下午1.12.30](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-15 下午1.12.30.png)
 
-在触发系统调用后，内核等待两个阶段完成后才返回。
+服务端通过通知机制或者回调函数来通知客户端。 阻塞：服务端返回结果之前，客户端线程会被挂起，此时线程不可被CPU调度，线程暂停运行。 非阻塞：在服务端返回前，函数不会阻塞调用端线程，而会立刻返回。
 
 #### 非阻塞 I /O
 
+![截屏2020-07-15 下午1.12.44](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-15 下午1.12.44.png)
+
 如果内核缓冲区没有数据，会直接返回。
 
-#### select
+#### 同步io
+
+**两者的区别就在于synchronous IO做”IO operation”的时候会将process阻塞。**按照这个定义，之前所述的blocking IO，non-blocking IO，IO multiplexing都属于synchronous IO。注意到non-blocking IO会一直轮询(polling)，这个过程是没有阻塞的，但是recvfrom阶段blocking IO,non-blocking IO和IO multiplexing都是阻塞的。 而asynchronous IO则不一样，当进程发起IO 操作之后，就直接返回再也不理睬了，直到kernel发送一个信号，告诉进程说IO完成。在这整个过程中，进程完全没有被block。
+
+
+链接：https://juejin.im/post/5c725dbe51882575e37ef9ed
+来源：掘金
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+
+#### 异步io
+
+#### ![截屏2020-07-15 下午1.14.34](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-15 下午1.14.34.png)
+
+#### 信号驱动io
+
+
+
+![截屏2020-07-15 下午1.14.00](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-15 下午1.14.00.png)
+
+#### select（io复用）
+
+#### ![截屏2020-07-15 下午1.13.07](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-15 下午1.13.07.png)
 
 select传入文件描述符；
 
@@ -143,4 +166,43 @@ https://baijiahao.baidu.com/s?id=1653394764952522005&wfr=spider&for=pc
 
 
 现在linux优化，只会有一个进程被唤醒。
+
+#### io模型比较
+
+主要区别：
+信号驱动io在从内核缓冲区复制到用户缓冲区的时候会阻塞。
+
+阻塞io整个过程都是阻塞的。
+
+非阻塞io内核到用户也是阻塞的。（需要不断的轮询）
+
+
+
+select或poll调用之后，会阻塞进程，与blocking IO阻塞不同在于，`此时的select不是等到socket数据全部到达再处理, 而是有了一部分数据就会调用用户进程来处理`。如何知道有一部分数据到达了呢？`监视的事情交给了内核，内核负责数据到达的处理。也可以理解为"非阻塞"吧`。
+
+
+
+在IO multiplexing Model中，`实际中，对于每一个socket，一般都设置成为non-blocking`，但是，如上图所示，整个用户的process其实是一直被block的。`只不过process是被select这个函数block，而不是被socket IO给block`。所以**`IO多路复用是阻塞在select，epoll这样的系统调用之上，而没有阻塞在真正的I/O系统调用如recvfrom之上。`**
+
+
+
+
+
+系统不需要创建新的额外进程或者线程，也不需要维护这些进程和线程的运行，降底了系统的维护工作量，节省了系统资源，I/O多路复用的主要应用场景如下：
+
+
+
+![截屏2020-07-15 下午1.17.26](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-15 下午1.17.26.png)
+
+![截屏2020-07-15 下午1.14.53](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-15 下午1.14.53.png)
+
+https://www.jianshu.com/p/486b0965c296
+
+
+
+。Linux 的异步 IO 最初是为数据库设计的，`因此通过异步 IO 的读写操作不会被缓存或缓冲，这就无法利用操作系统的缓存与缓冲机制`。
+
+**`很多人把 Linux 的 O_NONBLOCK 认为是异步方式，但事实上这是前面讲的同步非阻塞方式。`**需要指出的是，虽然 Linux 上的 IO API 略显粗糙，但每种编程框架都有封装好的异步 IO 实现。操作系统少做事，把更多的自由留给用户，正是 UNIX 的设计哲学，也是 Linux 上编程框架百花齐放的一个原因。
+
+从前面 IO 模型的分类中，我们可以看出 AIO 的动机：
 

@@ -153,7 +153,7 @@ host指明主机
 
 tranfer-encoding：chunked
 
-X-request-id：用于标记请求，出现文件快速定位，
+X-request-id：用于标记请求，出现问题快速定位，
 
 https://blog.csdn.net/yongwan5637/article/details/90898556
 
@@ -174,6 +174,32 @@ X-XSS-Protection（检测到攻击就不会显现网页）（xss攻击）
 X-Frame-Options（不能让iframe框架显示）（劫持站点攻击）
 
 X-Content-Type-Options: nosniff（阻止和contnt-type不一样的style和script）
+
+#### 服务器端
+
+如果可以再送出請求的時候，加上一些額外的標頭資訊（metadata）描述這個請求是從哪裡來的話，伺服器也可以根據標頭來做適當的回應，
+
+### 1. Sec-Fetch-Dest
+
+代表這個請求的目的地是哪裡。
+
+可能的值有 audio、document、font、image、object、serviceworker [等等](https://mikewest.github.io/sec-metadata/#sec-fetch-dest-header)。這樣有幾個好處，有了這些 header 的判斷，伺服器馬上就可以知道這個請求來源是否合法，例如如果這個來源是從 `` 來的，卻不是跟伺服器要圖片，那麼十之八九是駭客，我們就可以直接回應錯誤給他。
+
+
+
+该**`Sec-Fetch-Dest`**取元数据报头指示该请求的目的地，即所获取的数据将如何使用。
+
+### 2. Sec-Fetch-Mode
+
+代表請求的模式。主要有 cors、navigate、nested-navigate、no-cors 等等，來判斷這個請求的模式是什麼，類似 `fetch` 當中的 mode。
+
+像是 `Set-Fetch-User` 我們也可以知道使用者是否是透過操作（例如點擊、鍵盤等等）來發出請求的。
+
+### 3. Sec-Fetch-Site
+
+代表請求的來源是同源還是跨域。
+
+
 
 #### Cookie
 
@@ -278,8 +304,6 @@ dns通常运行在udp上，端口号53。
 
 #### 不重数
 
-
-
 TCP握手
 
 
@@ -355,6 +379,10 @@ MD5：
 https://www.cnblogs.com/fengf233/p/11775415.html
 
 连接重放攻击：A向b发送的所有报文如果被c截取到，那么他将会重新向b传输一次。而b不会察觉。
+
+
+
+为什么只有：我感觉这个过程最多只能生成三个随机数，以及只有四个地方需要加密
 
 
 
@@ -451,7 +479,25 @@ https://www.w3schools.com/tags/ref_httpmethods.asp
 
 https://www.sohu.com/a/353926375_468635
 
+#### utf- 8
 
+可变长度编码。
+
+其第一个字节为1的个数表示了这个unicode由几个自己所组成。
+
+对后的字节就是10开头。
+
+一半的话表示1到4个字节。
+
+
+
+https://www.zhihu.com/question/20167122
+
+bom用于标记字节序。
+
+但是utf-8不需要标记字节序。
+
+![截屏2020-07-13 上午10.52.06](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-13 上午10.52.06.png)
 
 #### status
 
@@ -460,6 +506,8 @@ https://www.sohu.com/a/353926375_468635
 
 
 200 oK：请求成功处理
+
+206 Partial Content：表示只是部分数据
 
 
 
@@ -478,6 +526,10 @@ https://www.sohu.com/a/353926375_468635
 403:拒绝请求（客户端错误）
 
 404:内容不存在
+
+416:范围越界，无法处理
+
+
 
 
 
@@ -520,3 +572,75 @@ https://blog.csdn.net/ailunlee/article/details/97831912
 - http2通过把http的数据分为frame 
 
 https://blog.csdn.net/striveb/article/details/84230923?utm_medium=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromMachineLearnPai2-1.nonecase&depth_1-utm_source=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromMachineLearnPai2-1.nonecase
+#### dh
+而 RSA 和 DH 两者之间的具体的区别就在于：RSA 会将 premaster secret 显示的传输，这样有可能会造成私钥泄露引起的安全问题。而 DH 不会将 premaster secret 显示的传输。
+
+作者：villainhr
+链接：https://segmentfault.com/a/1190000007283514
+来源：SegmentFault 思否
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+在 server 端进行 serverhello 阶段，这里 server 根据 client 发送过来的相关信息，采取不同的策略，同样会发送和 client 端匹配的 TLS 最高版本信息，cipher suite 和 自己产生的 random num. 并且，这里会产生该次连接独一无二的 sessionID。
+
+作者：villainhr
+链接：https://segmentfault.com/a/1190000007283514
+来源：SegmentFault 思否
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+
+如果你的 private key 能够用来破解以前通信的 session 内容，比如，通过 private key 破解你的 premaster secret ，得到了 sessionKey，就可以解密传输内容了。这种情况就是 non-forward-secrey。那如何做到 FS 呢？ 很简单，上文也已经提到过了，使用 DH 加密方式即可。因为，最后生成的 sessionKey 和 private key 并没有直接关系，premaster secret 是通过 g(ab) mod P 得到的。
+
+作者：villainhr
+链接：https://segmentfault.com/a/1190000007283514
+来源：SegmentFault 思否
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+
+#### 大文件
+
+数据压缩
+
+Transfer-Encoding: chunked**”：分块传输。
+
+
+
+第一，它必须检查范围是否合法，比如文件只有100个字节，但请求“200-300”，这就是范围越界了。服务器就会返回状态码**416**，意思是“你的范围请求有误，我无法处理，请再检查一下”。
+
+第二，如果范围正确，服务器就可以根据Range头计算偏移量，读取文件的片段了，返回状态码“**206 Partial Content**”，和200的意思差不多，但表示body只是原数据的一部分。
+
+第三，服务器要添加一个响应头字段**Content-Range**，告诉片段的实际偏移量和资源的总大小，格式是“**bytes x-y/length**”，与Range头区别在没有“=”，范围后多了总长度。例如，对于“0-10”的范围请求，值就是“bytes 0-10/100”。
+
+最后剩下的就是发送数据了，直接把片段用TCP发给客户端，一个范围请求就算是处理完了。
+
+你可以用实验环境的URI“/16-2”来测试范围请求，它处理的对象是“/mime/a.txt”。不过我们不能用Chrome浏览器，因为它没有编辑HTTP请求头的功能（这点上不如Firefox方便），所以还是要用Telnet
+
+
+
+作者：王侦
+链接：https://www.jianshu.com/p/d9941adfe58f
+来源：简书
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+
+
+
+![截屏2020-07-15 下午12.21.05](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-15 下午12.21.05.png)
+
+https://www.jianshu.com/p/d9941adfe58f
+
+
+
+不仅看视频的拖拽进度需要范围请求，常用的下载工具里的多段下载、断点续传也是基于它实现的，要点是：
+
+- 先发个HEAD，看服务器是否支持范围请求，同时获取文件的大小；
+- 开N个线程，每个线程使用Range字段划分出各自负责下载的片段，发请求传输数据；
+- 下载意外中断也不怕，不必重头再来一遍，只要根据上次的下载记录，用Range请求剩下的那一部分就可以了。
+
+
+
+作者：王侦
+链接：https://www.jianshu.com/p/d9941adfe58f
+来源：简书
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+
+
+
+etag管理文件内容变化
+
+bytes应用于压缩前的文件。

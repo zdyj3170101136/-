@@ -38,6 +38,12 @@ tcp/udp对整个tcp报文加上为首部校验。（udp检验和可选）
 
 
 
+为什么重复校验。
+
+现在来看确实比较多余。
+
+
+
 仅用于差错检测，不用于恢复
 
 
@@ -217,7 +223,7 @@ https://segmentfault.com/a/1190000020183650
 - 肯定确认和重传机制应对模糊不清的ack
 - 序号解决重传导致的重复分组问题
 - 使用定时器的超时重传机制解决数据丢失问题
-- 数据切片
+- 数据切片和pmtu探测解决mtu问题。
 - 对收到的数据报重新排序保存数据正确性
 - 流量控制
 - 拥塞控制
@@ -253,6 +259,8 @@ rwnd = 接收方应用最后一个读取的字节 - 缓存里头的字节。
 RFC 793
 
 
+
+！！！！ 提到session和timestamp
 
 - 为了避免连接复用时无法分辨出seq是延迟的还是上一条链接的。
 
@@ -296,7 +304,30 @@ https://draveness.me/whys-the-design-tcp-three-way-handshake/
 
 为了防止发送者发送一堆syn报文来泛洪攻击。
 
-步骤：当服务器接受到一个syn后，以源和目的ip，端口号， 当前时间计算一个cookie，作为初始序号发送SYNACK分组。并且不记忆任何东西。
+实现的关键在于cookie的计算，cookie的计算应该包含本次连接的状态信息，使攻击者不能伪造。
+
+cookie的计算：
+
+服务器收到一个SYN包，计算一个消息摘要mac。
+
+mac = MAC(A, k);
+
+MAC是密码学中的一个消息认证码函数，也就是满足某种安全性质的带密钥的hash函数，它能够提供cookie计算中需要的安全性。
+
+在Linux实现中，MAC函数为SHA1。
+
+A = SOURCE_IP || SOURCE_PORT || DST_IP || DST_PORT || t || MSSIND
+
+k为服务器独有的密钥，实际上是一组随机数。
+
+t为系统启动时间，每60秒加1。
+
+MSSIND为MSS对应的索引。
+————————————————
+版权声明：本文为CSDN博主「zhangskd」的原创文章，遵循CC 4.0 BY-SA版权协议，转载请附上原文出处链接及本声明。
+原文链接：https://blog.csdn.net/zhangskd/java/article/details/16986931
+
+
 
 当服务器接受到ACK后，重新计算cookie，如果发现等于ACK - 1，则分配资源。
 
@@ -382,25 +413,27 @@ tcp重传丢失的数据，如果只收到DUPACK，那么每个增加一个MSS�
 
 ![截屏2020-07-09 下午5.46.56](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-09 下午5.46.56.png)
 
-#### 关闭
-
-ESTABLISH主动端发送一个FIN报文，进入FIN_WAIT_1状态，当接受到ACK时进入FIN_WAIT_2状态。然后接受FIN（一直没有接受到FIN，超时后会释放资源）再发送ACK， 进入TIMEWAIT状态，等待30s后进入CLOSED状态。
-
-
-
-被动端收到FIN后发送ACK进入CLOSE_WAIT状态，发送FIN，进入LAST_ACK状态，再接受到ACK后关闭。
-
-
-
-FINZ_WAIT_2状态关闭发送，只能接受。半关闭。
-
 
 
 #### TIME_WAIT：
 
 主动发送方等待两个2 * MSL（报文段最大生存时间一个msl，2min），保证对方收到ACK，如果没有收到，则对方重发FIN，本地将会重发ACK)（大于ttl）
 
-https://blog.51cto.com/10706198/1775555
+
+
+(**此处应该是客户端收到一个非法的报文段，而返回一个RST的数据报，表明拒绝此次通信，然后双方就产生异常，而不是收不到。**)，那么服务器就不能按正常步骤进入close状态。那么就会耗费服务器的资源。当网络中存在大量的timewait状态，那么服务器的压力可想而知。
+
+（！！！！这种情况没啥问题，因为都是进入了closed状态）
+
+
+
+如果客户端等待的时间不够长，当服务端还没有收到 `ACK` 消息时，客户端就重新与服务端建立 TCP 连接就会造成以下问题 — 服务端因为没有收到 `ACK` 消息，所以仍然认为当前连接是合法的，客户端重新发送 `SYN` 消息请求握手时会收到服务端的 `RST` 消息，连接建立的过程就会被终止。
+
+
+
+经过2msl的时间足以让本次连接产生的所有报文段都从网络中消失，这样下一次新的连接中就肯定不会出现旧连接的报文段了。
+
+https://draveness.me/whys-the-design-tcp-time-wait/
 
 #### ttl
 
@@ -414,14 +447,16 @@ ttl是ip字段，每经过一个路由器减1，为零则发送icmp报文通知�
 
 
 
-主动关闭方如果不进入TIME_WAIT，被动关闭方将会重传FIN，这个时候关闭方无法识别，会回复RST。
+客户端主动关闭
 
-
-
-- 服务器关闭大量连接，出现大量TIME_WAIT状态，持续消耗资
-- 客户端会消耗掉多有的端口，导致无连接可用
+- 客户端关闭大量连接，出现大量TIME_WAIT状态，持续消耗资(服务器主动关闭的情况)
+- 如果客户端等待的时间不够长，当服务端还没有收到 `ACK` 消息时，客户端就重新与服务端建立 TCP 连接就会造成以下问题 — 服务端因为没有收到 `ACK` 消息，所以仍然认为当前连接是合法的，客户端重新发送 `SYN` 消息请求握手时会收到服务端的 `RST` 消息，连接建立的过程就会被终止。
 
 可以设置tcp_max_tw_buckets控制最大timewait数量
+
+
+
+RFC 793 中虽然指出了 TCP 连接需要在 `TIME_WAIT` 中等待 2 倍的 MSL，但是并没有解释清楚这里的两倍是从何而来，比较合理的解释是 — 网络中可能存在来自发起方的数据段，当这些发起方的数据段被服务端处理后又会向客户端发送响应，所以一来一回需要等待 2 倍的时间[5](https://draveness.me/whys-the-design-tcp-time-wait/#fn:5)。
 
 #### KEEPALIVE
 
@@ -506,6 +541,20 @@ https://blog.csdn.net/tiandijun/article/details/41961785
 
 
 
+中间点相当于丢包时候的cwnd，我们知道通常丢包后设置cwnd = 1，ssthresh = cwnd / 2。
+
+然后慢启动阶段倍数增长，当cwnd = ssthresh 时拥塞避免，1增长一个rtt。
+
+
+
+而图中左阶段就是进入拥塞避免阶段，区别在于此时ssthresh = 0.2cwnd。
+
+开始三次函数增长。
+
+右边是探测多余带宽。
+
+
+
 - 开始时很快
 
 - 接近Wmax时增长慢
@@ -516,8 +565,24 @@ https://blog.csdn.net/tiandijun/article/details/41961785
 
   https://blog.csdn.net/dog250/article/details/53013410
 
-  #### 最大tcp连接
+  
 
+  图中r就代表收敛速度。
+  
+  ![截屏2020-07-15 上午11.13.15](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-15 上午11.13.15.png)
+  
+  非常显然，beta决定了整个曲线对称范围围成区域的高度，而C则控制了从起始窗口到达丢包窗口的时间。
+  
+  由于r与C成反比，那么C越大，则探测到最大窗口的时间越短，反之则越久。由此，我们只要控制beta和C两个参数，就能控制CUBIC算法的行为了。
+  
+  
+  
+  
+  
+  ![截屏2020-07-15 上午11.10.19](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-15 上午11.10.19.png)
+  
+  #### ![截屏2020-07-15 上午11.11.13](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-15 上午11.11.13.png)最大tcp连接
+  
   四元组来唯一标识一个TCP连接：{local ip，本地端口，远程ip，远程端口}，最大tcp连接为客户端ip数×客户端端口数，对IPV4，不考虑ip地址分类等因素，最大tcp连接数大约2 ^ 32（ip数）* 2 ^ 16（端口数）
 
 #### Nigle
@@ -617,3 +682,15 @@ https://blog.csdn.net/u011130578/article/details/44918667?utm_medium=distribute.
 
 
 而时间戳就可以解决这个问题。
+
+#### 流量控制缺点
+
+接收方每次收到数据包，可以在发送确定报文的时候，同时告诉发送方自己的缓存区还剩余多少是空闲的，我们也把缓存区的剩余大小称之为接收窗口大小，用变量win来表示接收窗口的大小。
+
+ 
+
+发送方收到之后，便会调整自己的发送速率，也就是调整自己发送窗口的大小，当发送方收到接收窗口的大小为0时，发送方就会停止发送数据，防止出现大量丢包情况的发生。
+
+
+
+不是通过offset设置而是通过能发的窗口。
