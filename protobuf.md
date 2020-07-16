@@ -1,5 +1,7 @@
 #### tag-wireType-value
 
+- Protobuf全称： Google Protocol Buffer 
+
 // 要么使用自描述的，比如varant
 
 // 要么使用长度
