@@ -23,7 +23,9 @@
 
 
 
-值为 tag << 3 | wireType的混合编码形式（可见一个字节总共八位，低三位表示wiretype）随后跟着长度![截屏2020-07-10 下午8.22.08](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-10 下午8.22.08.png)
+值为 tag << 3 | wireType的混合编码形式（可见一个字节总共八位，低三位表示wiretype）
+
+随后跟着长度（如果是可变长度单位的话）。![截屏2020-07-10 下午8.22.08](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-10 下午8.22.08.png)
 
 #### varant
 
