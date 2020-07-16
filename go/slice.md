@@ -1,11 +1,8 @@
-#### slice
+#### ![截屏2020-07-16 下午8.41.44](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-16 下午8.41.44.png)slice
 
 字面量的形式都会在编译的时候转换为对应的代码形式。
 
 但是还是需要运行时候的支持，因为只有运行时候才会生成对应的代码。
-
-
-
 
 
 如果容量比较大或者逃逸分析，那么就会通过makeslice生成。
@@ -19,7 +16,7 @@
 #### 会预估一个期望容量
 
 - 如果期望容量大于两倍直接期望
-- 如果当前切片小于1024，就会翻倍
+- 不然如果当前切片小于1024，就会翻倍
 - 如果大于1024就会每次增加25%，直到新容量大于期望容量。
 
 
@@ -43,7 +40,7 @@ copy使用memove移动
 func possibleBipartition() bool {
 
 	a := [...]int{3, 2, 1}
-
+	
 	data := a
 	sort.Sort(sort.IntSlice(data[0:]))
 	fmt.Println(a)

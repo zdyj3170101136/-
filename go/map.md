@@ -40,9 +40,79 @@ load factor表 示bucket的最大容量和实际容量比值。
 
 如果太小，空间利用不当。太大那么就很容易出现碰撞的情况。
 
+
+
+*6.5* * 2 ^ B 个元素。
+
+
+
+为什么6.5，其实我们看图就知道。
+
+go官方有一个测试数据吧，就是说有overflow bucket的比例是20%差不多。。
+
+而随着装载因子增大，overflow的增长速率要越来越快。
+
+
+
+这个时候如果要找到一个已经出现的key，那么需要查找4.25次。
+
+找到一个已经没有出现的key要找6.5次。
+
+
+
+随着load facotr增大，这些消耗也会变大。
+
+```
+// Picking loadFactor: too large and we have lots of overflow
+// buckets, too small and we waste a lot of space. I wrote
+// a simple program to check some stats for different loads:
+// (64-bit, 8 byte keys and elems)
+//  loadFactor    %overflow  bytes/entry     hitprobe    missprobe
+//        4.00         2.13        20.77         3.00         4.00
+//        4.50         4.05        17.30         3.25         4.50
+//        5.00         6.85        14.77         3.50         5.00
+//        5.50        10.55        12.94         3.75         5.50
+//        6.00        15.27        11.67         4.00         6.00
+//        6.50        20.90        10.79         4.25         6.50
+//        7.00        27.14        10.15         4.50         7.00
+//        7.50        34.03         9.73         4.75         7.50
+//        8.00        41.10         9.40         5.00         8.00
+//
+// %overflow   = percentage of buckets which have an overflow bucket
+// bytes/entry = overhead bytes used per key/elem pair
+// hitprobe    = # of entries to check when looking up a present key
+// missprobe   = # of entries to check when looking up an absent key
+//
+```
+
 #### 桶的数量
 
 如果桶的数量等于0，就会在赋值的时候再分配。
+
+也就是说连一个bucket都不到的时候。
+
+然后分配在堆上。
+
+
+
+如果能在栈上分配的map，会在编译的时候传进来。
+
+
+
+```go
+// makemap implements Go map creation for make(map[k]v, hint).
+// If the compiler has determined that the map or the first bucket
+// can be created on the stack, h and/or bucket may be non-nil.
+// If h != nil, the map can be created directly in h.
+// If h.buckets != nil, bucket pointed to can be used as the first bucket.
+func makemap(t *maptype, hint int, h *hmap) *hmap {
+```
+
+```
+// Maximum number of key/elem pairs a bucket can hold.
+bucketCntBits = 3
+bucketCnt     = 1 << bucketCntBits
+```
 
 hash值为64bit。
 
@@ -142,6 +212,10 @@ key 和 value通过大小移动位置判断。
 那么通常一个会分裂为两个，一个是新，一个是旧。
 
 #### 遍历
+
+遍历遍历的是新bucket。
+
+
 
 遍历时由于有些bucket已经到了新的地方，而有些还没有。
 
