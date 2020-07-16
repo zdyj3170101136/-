@@ -4,7 +4,7 @@ https://github.com/maemual/raft-zh_cn/blob/master/raft-zh_cn.md
 
 raft通过选举一个领导人，领导人管理日志的复制。数据都从领导人流向其他服务器。
 
-
+Replicated And Fault Tolerant
 
 
 

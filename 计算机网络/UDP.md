@@ -4,6 +4,10 @@ UDP由于不保存连接状态，立即发送（TCP会把数据保存在缓冲�
 
 
 
+UDP协议简介 UDP 是User Datagram Protocol的简称， 中文名是用户数据报协议。
+
+
+
 更适合实时应用。
 
 用于DNS中
@@ -54,6 +58,7 @@ UDP由于不保存连接状态，立即发送（TCP会把数据保存在缓冲�
 - uuid和队头阻塞
 
 #### quic
+Quic 全称quick udp internet connection [1]，“快速UDP 互联网连接”
 
 由于tcp的滑动窗口特性，这种有着前后顺序的包之间。
 
@@ -134,6 +139,7 @@ QUIC 同样是一个可靠的协议，它使用 Packet Number 代替了 TCP 的 
 在tcp中，接受方丢弃已经接受的数据，考虑缓存溢出。
 
 但是quic不能。
+
 
 #### 更多的选择确认
 

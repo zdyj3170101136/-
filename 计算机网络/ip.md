@@ -1,4 +1,5 @@
 ## ip
+Internet Protocol Address，又譯為网际协议地址
 
 #### dhcp
 

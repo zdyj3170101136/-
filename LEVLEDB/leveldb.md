@@ -1,3 +1,29 @@
+#### lsm
+
+log-structed-merged-tree
+
+日志结构合并树。
+
+
+
+LSM树的核心思想就是放弃部分读的性能，换取最大的写入能力。
+
+
+
+LSM树的结构是横跨内存和磁盘的，包含memtable、immutable memtable、SSTable等多个部分。
+
+
+
+memtable使用跳表实现的内存数据库，当写数据到memtable中时，会先通过WAL的方式备份到磁盘中，以防数据因为内存掉电而丢失。
+
+然后memetable大小过大的时候，就会生成不可变的immutable memtable。
+
+然后这个不可变的数据库，再以1:1的形式存储入硬盘生成sstable。
+
+
+
+sstable分成不同的level，而由memtable生成的sstable会在第0层，然后sstable之间通过合并。生成更下层的sstable。（这也是merge的由来）。
+
 #### 日志
 
 http://blog.itpub.net/31561269/viewspace-2375371/
@@ -15,6 +41,10 @@ https://leveldb-handbook.readthedocs.io/zh/latest/rwopt.html
 chunk共有四种类型：full，first，middle，last。一条日志记录若只包含一个chunk，则该chunk的类型为full。若一条日志记录包含多个chunk，则这些chunk的第一个类型为first, 最后一个类型为last，中间包含大于等于0个middle类型的chunk。
 
 由于一个block的大小为32KiB，因此当一条日志文件过大时，会将第一部分数据写在第一个block中，且类型为first，若剩余的数据仍然超过一个block的大小，则第二部分数据写在第二个block中，类型为middle，最后剩余的数据写在最后一个block中，类型为last。
+
+
+
+只需要1次磁盘IO，再加1次内存操作。
 
 
 
@@ -164,18 +194,36 @@ session record
 
 #### Current
 
-current指向当前使用的manifest文件
+current指向当前使用的manifest文件（current是一个文件，保存manifest的名字。持久化）。
 
 （因为，如果生成新的manifest文件，还没来得及删除旧的，因此可能会同时存在多个）
 
+
+
 当我们setmeta的时候。
 
-- 我们首先对旧的current文件做一个.bak文件
-- 然后创建一个current.num文件，先把当前的manifest文件名写进去
-- 然后再rename，replace现在的current文件
-- 最后syncdir
+如果直接修改当前current文件的内容，那就表示删除旧的，增加新的。
+
+这是两个操作。
+
+如果旧的删除之后新的添加不了怎么办？？？
 
 
+
+而bak文件，是如果现在的current损坏，起码能回到上一个状态。
+
+
+
+- 我们首先对旧的current文件做一个.bak文件（防止旧的currnt文件删除后，新的manifest又创建失败）。
+- 然后创建一个current.num文件，先把当前的manifest文件名写进去（cureent1文件）。
+- 然后再rename，replace现在的current文件（把current1变换成curren文件）。
+- 最后syncdir（重要）
+
+#### 对于比较大的块文件
+
+我们首先得监理一个临时文件，等临时文件写入成功后，再rename生成正式的文件。
+
+为了防止如果写入失败，造成不一致的状态。
 
 #### syncdir
 
@@ -262,7 +310,8 @@ sstable 是memtable经过minor compaction生成的磁盘数据。
 - filter block：bloom过滤器
 - datab block：数据
 - index block：存储data block的元数据
-- footer： index block等的元数据
+- meta index block：存储filter的元信息
+- footer： index block和meta index block的元数据
 
 
 
@@ -301,8 +350,19 @@ filter block主要是每2kb放一个过滤器存放数据。
 
 #### index block
 
-- 偏移量
-- 最大的key
+- 与meta index block类似，index block用来存储所有data block的相关索引信息。
+
+  indexblock包含若干条记录，每一条记录代表一个data block的索引信息。
+
+  一条索引包括以下内容：
+
+  1. data block i 中最大的key值；
+  2. 该data block起始地址在sstable中的偏移量；
+  3. 该data block的大小；
+
+
+
+![截屏2020-07-16 下午1.04.09](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-16 下午1.04.09.png)
 
 通过index block 比较在哪个data blcok。
 
@@ -317,11 +377,12 @@ footer 报考meta index和index的偏移量。
 
 
 1. 首先判断“文件句柄”cache中是否有指定sstable文件的文件句柄，若存在，则直接使用cache中的句柄；否则打开该sstable文件，**按规则读取该文件的元数据**，将新打开的句柄存储至cache中；
-2. 利用sstable中的index block进行快速的数据项位置定位，得到该数据项有可能存在的**两个**data block；
-3. 利用index block中的索引信息，首先打开第一个可能的data block；
-4. 利用filter block中的过滤信息，判断指定的数据项是否存在于该data block中，若存在，则创建一个迭代器对data block中的数据进行迭代遍历，寻找数据项；若不存在，则结束该data block的查找；
-5. 若在第一个data block中找到了目标数据，则返回结果；若未查找成功，则打开第二个data block，重复步骤4；
-6. 若在第二个data block中找到了目标数据，则返回结果；若未查找成功，则返回`Not Found`错误信息；
+2. 通过footer找到index block和meta index bloack。
+3. 利用sstable中的index block进行快速的数据项位置定位，得到该数据项有可能存在的**两个**data block；
+4. 利用index block中的索引信息，首先打开第一个可能的data block；
+5. 利用filter block中的过滤信息，判断指定的数据项是否存在于该data block中，若存在，则创建一个迭代器对data block中的数据进行迭代遍历，寻找数据项；若不存在，则结束该data block的查找；
+6. 若在第一个data block中找到了目标数据，则返回结果；若未查找成功，则打开第二个data block，重复步骤4；
+7. 若在第二个data block中找到了目标数据，则返回结果；若未查找成功，则返回`Not Found`错误信息；
 
 
 
