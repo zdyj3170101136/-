@@ -1,4 +1,5 @@
 #### ext4文件系统
+EXT4全称是Fourth extended filesystem，是在EXT3的基础上新增了高级功能，属于第四代的扩展文件系统。
 
 #### inode
 
