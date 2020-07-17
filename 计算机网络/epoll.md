@@ -226,3 +226,19 @@ https://www.jianshu.com/p/486b0965c296
 
 
 
+#### epoll到底是不是异步io
+
+更为重要的是, epoll 因为采用 mmap的机制, 使得 内核socket buffer和 用户空间的 buffer共享, 从而省去了 socket data copy, 这也意味着, 当epoll 回调上层的 callback函数来处理 socket 数据时, 数据已经从内核层 "自动" 到了用户空间, 虽然和 用poll 一样, 用户层的代码还必须要调用 read/write, 但这个函数内部实现所触发的深度不同了.
+
+用 poll 时, poll通知用户空间的Appliation时, 数据还在内核空间, 所以Appliation调用 read API 时, 内部会做 copy socket data from kenel space to user space.
+
+而用 epoll 时, epoll 通知用户空间的Appliation时?, 数据已经在用户空间, 所以 Appliation调用 read API 时?, 只是读取用户空间的 buffer, 没有 kernal space和 user space的switch了.
+
+于是想了一下：
+
+明显没有IO操作的拷贝数据到内核空间了，stevens应该在99年就挂了，2.6内核的epoll才采用mmap机制，书籍偏旧了吧。
+
+那么epoll是异步IO了吧。
+
+
+
