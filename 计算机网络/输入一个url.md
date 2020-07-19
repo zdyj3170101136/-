@@ -401,7 +401,9 @@ https://zhuanlan.zhihu.com/p/61552666
 - 构建出dom树
 - ![截屏2020-07-19 下午11.24.21](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-19 下午11.24.21.png)
 
-如果遇到静态资源，link标签则去请求相应的资源，遇到script标签就会调用js引擎解释并执行（全局执行js代码的时候，dom树是禁止被访问的，因为js也可以操作dom结构，此时dom树并没有创建完成，所以js我们大都建议放在body元素之后（因为有些js执行期间可能会很耗时），这样就不会阻止其他资源的下载）。
+如果遇到静态资源，link标签则去请求相应的资源（强调这个请求是异步的）。
+
+遇到script标签就会调用js引擎解释并执行（全局执行js代码的时候，dom树是禁止被访问的，因为js也可以操作dom结构，此时dom树并没有创建完成，所以js我们大都建议放在body元素之后（因为有些js执行期间可能会很耗时），这样就不会阻止其他资源的下载）。
 ————————————————
 版权声明：本文为CSDN博主「李晓nic」的原创文章，遵循CC 4.0 BY-SA版权协议，转载请附上原文出处链接及本声明。
 原文链接：https://blog.csdn.net/weixin_42128813/java/article/details/103556398
@@ -416,6 +418,8 @@ https://zhuanlan.zhihu.com/p/61552666
 
 所以我们写 CSS 时，尽量用 id 和 class，千万不要过度层叠。
 
+它根据元素的属性等，并从 DocumentRuleSets 类中获取规则集合，依次按照 ID、类别、标签等选择器信息逐次匹配获得元素的样式。（强调属性，以及选择器的顺序）
+
 #### 构建rendor渲染树
 
 为每个dom树节点计算css样式信息。
@@ -426,7 +430,7 @@ https://zhuanlan.zhihu.com/p/61552666
 
 
 
-请注意 `visibility: hidden` 与 `display: none` 是不一样的。前者隐藏元素，但元素仍占据着布局空间（即将其渲染成一个空框），而后者 (`display: none`) 将元素从渲染树中完全移除，元素既不可见，也不是布局的组成部分。
+请注意 `visibility: hidden` 与 `display: none` 是不一样的。前者隐藏元素，但元素仍占据着布局空间（即将其渲染成一个空框），而后者 (`display: none`) 将元素从渲染树中完全移除，元素既不可见，也不是布局的组成部分。（强调这两个节点）
 
 
 
@@ -483,3 +487,59 @@ https://zhuanlan.zhihu.com/p/61552666
 
 
 `display:none` 会触发回流，而 `visibility:hidden` 只会触发重绘
+
+
+
+#### js事件循环
+
+从上图我们可以看出，js主线程它是有一个执行栈的，所有的js代码都会在执行栈里运行。我们看看浏览器上的执行栈
+
+
+
+![img](https://user-gold-cdn.xitu.io/2019/10/17/16dd55cd629fba03?imageView2/0/w/1280/h/960/format/webp/ignore-error/1)
+
+
+
+在执行代码过程中，如果遇到一些异步代码(比如setTimeout,ajax,promise.then以及用户点击等操作),那么浏览器就会将这些代码放到另一个线程(在这里我们叫做幕后线程)中去执行，在前端由浏览器底层执行，在 node 端由 libuv 执行，这个线程的执行不阻塞主线程的执行，主线程继续执行栈中剩余的代码。
+
+当幕后线程（background thread）里的代码执行完成后(比如setTimeout时间到了，ajax请求得到响应),该线程就会将它的回调函数放到任务队列（又称作事件队列、消息队列）中等待执行。而当主线程执行完栈中的所有代码后，它就会检查任务队列是否有任务要执行，如果有任务要执行的话，那么就将该任务放到执行栈中执行。如果当前任务队列为空的话，它就会一直循环等待任务到来。因此，这叫做事件循环。
+
+作者：小黎也
+链接：https://juejin.im/post/5da742936fb9a04e223333ff
+来源：掘金
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+
+
+
+那么，问题来了。如果任务队列中，有很多个任务的话，那么要先执行哪一个任务呢？ 其实(正如上图所示)，js是有两个任务队列的，一个叫做 Macrotask Queue(Task Queue) 大任务, 一个叫做 Microtask Queue 小任务
+
+Macrotask 常见的任务：
+
+- setTimeout
+- setInterval
+- setImmediate
+- I/O
+- 用户交互操作，UI渲染
+
+Microtask 常见的任务：
+
+- Promise(重点)
+- process.nextTick(nodejs)
+- Object.observe(不推荐使用)
+
+那么，两者有什么具体的区别呢？或者说，如果两种任务同时出现的话，应该选择哪一个呢？
+
+其实事件循环执行流程如下:
+
+1. 检查 Macrotask 队列是否为空,若不为空，则进行下一步，若为空，则跳到3
+2. 从 Macrotask 队列中取队首(在队列时间最长)的任务进去执行栈中执行(仅仅一个)，执行完后进入下一步
+3. 检查 Microtask 队列是否为空，若不为空，则进入下一步，否则，跳到1（开始新的事件循环）
+4. 从 Microtask 队列中取队首(在队列时间最长)的任务进去事件队列执行,执行完后，跳到3 其中，在执行代码过程中新增的microtask任务会在当前事件循环周期内执行，而新增的macrotask任务只能等到下一个事件循环才能执行了。
+
+> 简而言之，一次事件循环只执行处于 Macrotask 队首的任务，执行完成后，立即执行 Microtask 队列中的所有任务。
+
+
+作者：小黎也
+链接：https://juejin.im/post/5da742936fb9a04e223333ff
+来源：掘金
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。![截屏2020-07-20 上午12.17.05](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-20 上午12.17.05.png)
