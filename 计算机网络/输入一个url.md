@@ -2,7 +2,7 @@
 
 - 判断是“合法的url”还是一个搜索关键字。
 
-- 使用hsts进行安全访问
+- 使用hsts进行安全访问（重点在于hsts和缓存策略，以及dns查询（通过操作系统）的过程）
 - ![截屏2020-07-19 下午4.20.24](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-19 下午4.20.24.png)
 
 #### hsts
