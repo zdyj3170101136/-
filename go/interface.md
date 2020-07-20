@@ -64,6 +64,10 @@ flag表示是否可以修改。
 
 
 
+通过把对应的结构体变为interface{}也就时eface。
+
+eface里头保存了这个结构体的type。
+
 #### 反射修改值
 
 ![截屏2020-07-16 上午12.00.48](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-16 上午12.00.48.png)
