@@ -1,7 +1,7 @@
 ## ip
 Internet Protocol Address，又譯為网际协议地址
 
-#### dhcp
+#### dhcp（中国dhcp获得ip）
 
 客户在端口67通过udp发送该报文。
 

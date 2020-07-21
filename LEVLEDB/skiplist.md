@@ -158,77 +158,117 @@ height为1的时候遍历到21。
 package main
 
 import (
-   "bytes"
-   "fmt"
-   "math/rand"
-   "sync"
+	"bytes"
+	"fmt"
+	"github.com/syndtr/goleveldb/leveldb/errors"
+	"math/rand"
+	"sync"
 )
 
+// Common errors.
+var (
+	ErrNotFound     = errors.ErrNotFound
+	ErrIterReleased = errors.New("leveldb/memdb: iterator released")
+)
+
+
+const tMaxHeight = 12
+
 func main() {
-   db := New(1000)
-   
-   testdatas := []struct{
-      key []byte
-      value []byte
-   } {
-      {
-         []byte{11},
-         []byte{11},
-      },
-      {
-         []byte{12},
-         []byte{12},
-      },
-      {
-         []byte{1},
-         []byte{1},
-      },
-      {
-         []byte{25},
-         []byte{25},
-      },
-      {
-         []byte{7},
-         []byte{7},
-      },
-   }
+	db := New(1000)
 
-   for _, test := range testdatas {
-      db.Put(test.key, test.value)
-      fmt.Println(db.kvData)
-      fmt.Println(db.nodeData)
-   }
-   // 其实默认为12，打印第0个node的所有层高
-   // 第i个height包括所有第i层的节点的nodedata的下标
-   // 因此第一个height包括所有的node其实
-   height := db.nodeData[nHeight]
-   // 不断打印节点
-   for i := 1; i <= height; i++ {
-      start := 0
+	testdatas := []struct{
+		key []byte
+		value []byte
+	} {
+		{
+			[]byte{11},
+			[]byte{11},
+		},
+		{
+			[]byte{12},
+			[]byte{12},
+		},
+		{
+			[]byte{1},
+			[]byte{1},
+		},
+		{
+			[]byte{25},
+			[]byte{25},
+		},
+		{
+			[]byte{7},
+			[]byte{7},
+		},
+	}
 
-      if db.nodeData[start + nHeight + i] == 0 {
-         break
-      }
-      fmt.Printf("第%d层节点如下\n", i)
+	for _, test := range testdatas {
+		db.Put(test.key, test.value)
+		fmt.Println(db.kvData)
+		fmt.Println(db.nodeData)
+	}
+	// 其实默认为12，打印第0个node的所有层高
+	// 第i个height包括所有第i层的节点的nodedata的下标
+	// 因此第一个height包括所有的node其实
+	height := db.nodeData[nHeight]
+	// 不断打印节点
+	for i := 1; i <= height; i++ {
+		start := 0
 
-      // 如果这一层的点不为空
-      for ; db.nodeData[start + nHeight + i] != 0; {
-         fmt.Printf("node date:kv offset, k length, v length, height, next...\n")
-         newnode := db.nodeData[start + nHeight + i]        // 新节点在nodedata的下标
-         newnodeHeight := db.nodeData[newnode + nHeight]    // 对应的height长度
+		if db.nodeData[start + nHeight + i] == 0 {
+			break
+		}
+		fmt.Printf("第%d层节点如下\n", i)
 
-         newnodeData := db.nodeData[newnode: newnode + 4 + newnodeHeight]
-         fmt.Println(newnodeData)
+		// 如果这一层的点不为空
+		for ; db.nodeData[start + nHeight + i] != 0; {
+			fmt.Printf("node date:kv offset, k length, v length, height, next...\n")
+			newnode := db.nodeData[start + nHeight + i]        // 新节点在nodedata的下标
+			newnodeHeight := db.nodeData[newnode + nHeight]    // 对应的height长度
 
-         fmt.Printf("key value\n")
-         // 把key和value也打印出来
-         kvoffset := newnodeData[nKV]
-         klen := newnodeData[nKey]
-         vlen := newnodeData[nVal]
-         fmt.Println(db.kvData[kvoffset: kvoffset + klen + vlen])
-         start = db.nodeData[start + nHeight + i]
-      }
-   }
+			newnodeData := db.nodeData[newnode: newnode + 4 + newnodeHeight]
+			fmt.Println(newnodeData)
+
+			fmt.Printf("key value\n")
+			// 把key和value也打印出来
+			kvoffset := newnodeData[nKV]
+			klen := newnodeData[nKey]
+			vlen := newnodeData[nVal]
+			fmt.Println(db.kvData[kvoffset: kvoffset + klen + vlen])
+			start = db.nodeData[start + nHeight + i]
+		}
+	}
+}
+
+
+const (
+	nKV = iota
+	nKey
+	nVal
+	nHeight
+	nNext
+)
+
+
+
+// DB is an in-memory key/value database.
+type DB struct {
+	rnd *rand.Rand       // 随机种子,记住命名这里是指针的原因，是因为很多是指针接收器和值接收器
+
+	mu     sync.RWMutex  // 控制并发，不要指针
+	kvData []byte // 存放kv数据
+	// Node data:
+	// [0]         : KV offset
+	// [1]         : Key length
+	// [2]         : Value length
+	// [3]         : Height
+	// [3..height] : Next nodes   //
+	nodeData  []int
+	prevNode  [tMaxHeight]int   // 注意是一个数组
+	maxHeight int
+	n         int
+	kvSize    int
 }
 
 // New creates a new initialized in-memory key/value DB. The capacity
@@ -240,130 +280,117 @@ func main() {
 //
 // The returned DB instance is safe for concurrent use.
 func New(capacity int) *DB {
-   p := &DB{
-      rnd:       rand.New(rand.NewSource(0xdeadbeef)), // magicnumber，输出固定的数字
-      maxHeight: 1, // 初始化为1
-      kvData:    make([]byte, 0, capacity),
-      nodeData:  make([]int, 4+tMaxHeight), // 四的倍数
-   }
-   p.nodeData[nHeight] = tMaxHeight   // 存储node的高度
-   return p
+	p := &DB{
+		rnd:       rand.New(rand.NewSource(0xdeadbeef)), // magicnumber，输出固定的数字
+		maxHeight: 1, // 初始化为1
+		kvData:    make([]byte, 0, capacity),
+		nodeData:  make([]int, 4+tMaxHeight), // 四的倍数
+	}
+	p.nodeData[nHeight] = tMaxHeight   // 存储node的高度
+	return p
 }
 
 
 func (p *DB) randHeight() (h int) {
-   const branching = 4
-   h = 1
-   for h < tMaxHeight && p.rnd.Int()%branching == 0 {
-      // 生成随机数，0，1，2，3。四分之一的概率增加
-      h++
-   }
-   return
+	const branching = 4
+	h = 1
+	for h < tMaxHeight && p.rnd.Int()%branching == 0 {
+		// 生成随机数，0，1，2，3。四分之一的概率增加
+		h++
+	}
+	return
 }
 
 // bool表示找到的下标是否相等
 // Must hold RW-lock if prev == true, as it use shared prevNode slice.
 func (p *DB) findGE(key []byte, prev bool) (int, bool) {
-   node := 0  // 从第零个节点开始遍历
-   h := p.maxHeight - 1  // 从最高的指针开始搜索
-   for {
+	node := 0  // 从第零个节点开始遍历
+	h := p.maxHeight - 1  // 从最高的指针开始搜索
+	for {
 
-      next := p.nodeData[node+nNext+h]
-      cmp := 1                      // 说明默认高度减小（包括当前无指针的时候）
-      if next != 0 {                // next不为零，说明此时指针不为空
-         o := p.nodeData[next]     // 从h高度的指针的nodedata取出key的长度，我们知道【0，1）长度为1，然后比较大小
-         cmp = bytes.Compare(p.kvData[o:o+p.nodeData[next+nKey]], key)
-      }
-      if cmp < 0 {                  // 持续从高度为height的里头找到大于等于当前的key
-         // Keep searching in this list
-         node = next  // 注意只有小于才会更新node
-      } else {                       // 记录prevNode， 存储了每个高度的prevnode， prevnode表示所有大于等于当前节点的节点的值
-         if prev {
-            p.prevNode[h] = node
-         } else if cmp == 0 {       // 如果相等就返回
-            return next, true      // prevnode存储的是之前的节点的下标，因此是弄的；这里存的是要插入在之前的节点的下标，因此是next
-         }
-         if h == 0 {                // 如果高度为0，则直接返回
-            return next, cmp == 0
-         }
-         h--                        // 不然减小高度，精细化搜索
-      }
-   }
+		next := p.nodeData[node+nNext+h]
+		cmp := 1                      // 说明默认高度减小（包括当前无指针的时候）
+		if next != 0 {                // next不为零，说明此时指针不为空
+			o := p.nodeData[next]     // 从h高度的指针的nodedata取出key的长度，我们知道【0，1）长度为1，然后比较大小
+			cmp = bytes.Compare(p.kvData[o:o+p.nodeData[next+nKey]], key)
+		}
+		if cmp < 0 {                  // 持续从高度为height的里头找到大于等于当前的key
+			// Keep searching in this list
+			node = next  // 注意只有小于才会更新node
+		} else {                       // 记录prevNode， 存储了每个高度的prevnode， prevnode表示所有大于等于当前节点的节点的值
+			if prev {
+				p.prevNode[h] = node
+			} else if cmp == 0 {       // 如果相等就返回
+				return next, true      // prevnode存储的是之前的节点的下标，因此是弄的；这里存的是要插入在之前的节点的下标，因此是next
+			}
+			if h == 0 {                // 如果高度为0，则直接返回(为什么这里返回next，因为我们会遍历0层节点到一层节点间的指针，next为可能等于的弄的)
+				return next, cmp == 0
+			}
+			h--                        // 不然减小高度，精细化搜索
+		}
+	}
 }
 
-const (
-   nKV = iota
-   nKey
-   nVal
-   nHeight
-   nNext
-)
-
-const tMaxHeight = 12
-
-
-
-// DB is an in-memory key/value database.
-type DB struct {
-   rnd *rand.Rand       // 随机种子,记住命名这里是指针的原因，是因为很多是指针接收器和值接收器
-
-   mu     sync.RWMutex  // 控制并发，不要指针
-   kvData []byte // 存放kv数据
-   // Node data:
-   // [0]         : KV offset
-   // [1]         : Key length
-   // [2]         : Value length
-   // [3]         : Height
-   // [3..height] : Next nodes   //
-   nodeData  []int
-   prevNode  [tMaxHeight]int   // 注意是一个数组
-   maxHeight int
-   n         int
-   kvSize    int
-}
 
 // Put sets the value for the given key. It overwrites any previous value
 // for that key; a DB is not a multi-map.
 //
 // It is safe to modify the contents of the arguments after Put returns.
 func (p *DB) Put(key []byte, value []byte) error {
-   p.mu.Lock()
-   defer p.mu.Unlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-   if node, exact := p.findGE(key, true); exact {  // 如果相等，替换
-      kvOffset := len(p.kvData)                 // 附加key，value
-      p.kvData = append(p.kvData, key...)
-      p.kvData = append(p.kvData, value...)
-      p.nodeData[node] = kvOffset               // 更新偏移量
-      m := p.nodeData[node+nVal]                // 更新value的元数据, 别忘了
-      p.nodeData[node+nVal] = len(value)        // 更新kvsize的大小
-      p.kvSize += len(value) - m                // 我们只记录最新的（这就是kvsize的来源）
-      return nil
-   }
+	if node, exact := p.findGE(key, true); exact {  // 如果相等，替换
+		kvOffset := len(p.kvData)                 // 附加key，value
+		p.kvData = append(p.kvData, key...)
+		p.kvData = append(p.kvData, value...)
+		p.nodeData[node] = kvOffset               // 更新偏移量
+		m := p.nodeData[node+nVal]                // 更新value的元数据, 别忘了
+		p.nodeData[node+nVal] = len(value)        // 更新kvsize的大小
+		p.kvSize += len(value) - m                // 我们只记录最新的（这就是kvsize的来源）
+		return nil
+	}
 
-   h := p.randHeight()  // maxheight初始为1，如果随机的height大于当前的最高height，那么首先更新maxheight
-   if h > p.maxHeight { // 然后当前高度的height直接指向0层节点，因为0层节点具有所有其他height层节点的指针哈。
-      for i := p.maxHeight; i < h; i++ {
-         p.prevNode[i] = 0 // 指向0层节点
-      }
-      p.maxHeight = h
-   }
-   fmt.Println(h)
+	h := p.randHeight()  // maxheight初始为1，如果随机的height大于当前的最高height，那么首先更新maxheight
+	if h > p.maxHeight { // 然后当前高度的height直接指向0层节点，因为0层节点具有所有其他height层节点的指针哈。
+		for i := p.maxHeight; i < h; i++ {
+			p.prevNode[i] = 0 // 指向0层节点
+		}
+		p.maxHeight = h
+	}
+	fmt.Println(h)
 
-   kvOffset := len(p.kvData)
-   p.kvData = append(p.kvData, key...)
-   p.kvData = append(p.kvData, value...)  // 在kvdata的末尾添加key和value的数据
-   // Node
-   node := len(p.nodeData)                // 在nodedata末尾添加元数据和生成的随机高度
-   p.nodeData = append(p.nodeData, kvOffset, len(key), len(value), h)   // 对于新节点，添加在后面
-   for i, n := range p.prevNode[:h] {     // 如果height为1，就只有一个节点
-      m := n + nNext + i                 // i表示高度，说明对于第n个node，它的第i位置插入一个元素
-      p.nodeData = append(p.nodeData, p.nodeData[m])  // 当前node插入在prevnode和prevnode之前的node， 至少也会有一个为0,容易忘记！！！
-      p.nodeData[m] = node
-   }
+	kvOffset := len(p.kvData)
+	p.kvData = append(p.kvData, key...)
+	p.kvData = append(p.kvData, value...)  // 在kvdata的末尾添加key和value的数据
+	// Node
+	node := len(p.nodeData)                // 在nodedata末尾添加元数据和生成的随机高度
+	p.nodeData = append(p.nodeData, kvOffset, len(key), len(value), h)   // 对于新节点，添加在后面
+	for i, n := range p.prevNode[:h] {     // 如果height为1，就只有一个节点
+		m := n + nNext + i                 // i表示高度，说明对于第n个node，它的第i位置插入一个元素
+		p.nodeData = append(p.nodeData, p.nodeData[m])  // 当前node插入在prevnode和prevnode之前的node， 至少也会有一个为0,容易忘记！！！
+		p.nodeData[m] = node
+	}
 
-   p.kvSize += len(key) + len(value)       // 增加大小
-   p.n++
-   return nil
+	p.kvSize += len(key) + len(value)       // 增加大小
+	p.n++
+	return nil
+}
+
+// Get gets the value for the given key. It returns error.ErrNotFound if the
+// DB does not contain the key.
+//
+// The caller should not modify the contents of the returned slice, but
+// it is safe to modify the contents of the argument after Get returns.
+func (p *DB) Get(key []byte) (value []byte, err error) {
+	p.mu.RLock()   // 加读锁
+	if node, exact := p.findGE(key, false); exact { // 重点是对exact的判断
+		o := p.nodeData[node] + p.nodeData[node+nKey]
+		value = p.kvData[o : o+p.nodeData[node+nVal]]
+	} else {
+		err = ErrNotFound
+	}
+	p.mu.RUnlock()
+	return
 }
 ```

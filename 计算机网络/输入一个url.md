@@ -7,7 +7,7 @@
 
 #### hsts
 
-正常我们输入url，浏览器默认以http形式向80端口发送请求（或者通过点击书签的格式）。收到302重定向后再以https发送请求。
+正常我们输入url，浏览器默认以http形式向80端口发送请求（或者通过点击书签的格式）。收到302重定向后再以https发送请求。(有可能会遇到中间人攻击)
 
 - 在服务器响应头中添加 `Strict-Transport-Security`，可以设置 `max-age`
 - 用户访问时，服务器种下这个头
@@ -47,7 +47,7 @@ https://github.com/biaochenxuying/blog/issues/3
 
 #### dns查询
 
-把url变成ip地址（强调53的udp端口号）
+把url变成ip地址（强调54的udp端口号）
 
 https://blog.51cto.com/zengestudy/2132511
 
@@ -82,6 +82,8 @@ https://blog.51cto.com/zengestudy/2132511
 - 浏览器使用生成http报文
 
 - 运输层三次握手建立连接（强调初始随机序列号和timestamp）
+
+- 通过dhcp（目的端口67，源端口68获得这个ip地址）
 
 - ip层通过bgp协议把这个报文通过指定的as-path发送的网关，通过ospf在一个as内部找到到这个网关的下一跳路径。
 
