@@ -4,6 +4,20 @@
 
 我们使用上述 `RPCError` 结构体时并不关心它实现了哪些接口，Go 语言只会在传递参数、返回参数以及变量赋值时才会对某个类型是否实现接口进行检查，这里举几个例子来演示发生接口类型检查的时机：
 
+![截屏2020-07-22 下午1.16.29](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-22 下午1.16.29.png)
+
+
+
+如果我们使用结构体指针初始化变量，那么可以使用（*）ptr自然的实现用结构体实现的接口。
+
+结构体指针同理。
+
+
+
+而我们使用结构体初始化变量，那么我们其实是值复制，创建了一个新的结构体，而虽然eface中保存的是指针，不过已经保存的是新结构体的指针了，因此结构体指针实现的接口不通过。
+
+因为已经不是操作原来的结构体了。
+
 ![截屏2020-07-15 下午11.27.58](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-15 下午11.27.58.png)
 
 
@@ -50,11 +64,19 @@ interfacetype里头的存有method
 
 func存储的是实现了interface的实际函数。
 
+typeof先转换成空接口，然后把控接口用unsfe.Pointer修改类型转换成emptyinterface，
+
+然后用eface的_type作为参数，返回一个实现了Type这个接口的变量。
+
 #### reflect。typeof
 
 ![截屏2020-07-15 下午11.55.45](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-15 下午11.55.45.png)
 
 #### reflect.valueof
+
+也是首先转化为空接口。
+
+
 
 而reflect。valueof根据字段名修改字段。
 
@@ -81,3 +103,19 @@ eface里头保存了这个结构体的type。
 https://www.cnblogs.com/shijingxiang/articles/12201984.html
 
 ![截屏2020-07-16 上午12.06.38](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-16 上午12.06.38.png)
+
+#### 内嵌
+
+![截屏2020-07-22 下午1.27.46](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-22 下午1.27.46.png)
+
+
+
+
+
+![截屏2020-07-22 下午1.28.49](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-22 下午1.28.49.png)
+
+内嵌入的初始化时自动赋值。
+
+
+
+结构体中包含匿名（内嵌）字段叫嵌入或者内嵌；而如果结构体中字段包含了类型名，还有字段名，则是聚合。聚合的在JAVA和C++都是常见的方式，而内嵌则是Go 的特有方式。
