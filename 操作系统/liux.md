@@ -369,7 +369,10 @@ x 不依赖终端
 
 u 以用户为导向
 
+g 显示子进程的状态
+
 ps -aux 所有信息
+
 
 ![截屏2020-06-21 下午9.02.55](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-06-21 下午9.02.55.png)
 
