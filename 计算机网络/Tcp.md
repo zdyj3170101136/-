@@ -696,3 +696,22 @@ https://blog.csdn.net/u011130578/article/details/44918667?utm_medium=distribute.
 
 
 不是通过offset设置而是通过能发的窗口。
+
+
+
+#### 心跳包
+
+tcp中如果关闭会有fin，对方能够得到连接断开的消息。
+
+但是
+
+- 操作系统崩溃，不会发送fin
+- 而keepalive是操作系统处理，即使进程死锁或者阻塞，依然能够正常工作。而keepalive无法。
+
+如果TCP连接中的另一方因为停电突然断网，我们并不知道连接断开，此时发送数据失败会进行重传，由于重传包的优先级要高于keepalive的数据包，因此keepalive的数据包无法发送出去。只有在长时间的重传失败之后我们才能判断此连接断开了。
+
+![截屏2020-07-22 下午9.35.33](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-22 下午9.35.33.png)
+
+#### tcp和udp同一端口
+
+3、TCP和UDP传输协议监听同一个端口后，接收数据互不影响，不冲突。因为数据接收时时根据五元组`{传输协议，源IP，目的IP，源端口，目的端口}`判断接受者的。
