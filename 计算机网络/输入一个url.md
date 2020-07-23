@@ -101,6 +101,14 @@ https://blog.51cto.com/zengestudy/2132511
 
 说明get请求和post的请求的区别：
 
+get获取，post提交更新资源
+
+
+
+注意tcp和quic协议的竞争。
+
+
+
 以及状态吗100 continue和401请求为满足。
 
 
@@ -254,7 +262,7 @@ Content distribution network(can)
 目录负责：
 
 - 逻辑卷到物理卷的映射，给服务区构建url使用
-- 在各个物理机器上平衡读，在逻辑卷上平衡写。
+- 在各个物理机器上平衡读，在逻辑卷上平衡写。（注意平衡读和写的范畴）。
 - 在cdn和cache中平衡读，让我们调整cdn负载
 - 标记那些只读机器
 

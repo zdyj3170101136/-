@@ -320,7 +320,8 @@ func (p *DB) findGE(key []byte, prev bool) (int, bool) {
 		} else {                       // 记录prevNode， 存储了每个高度的prevnode， prevnode表示所有大于等于当前节点的节点的值
 			if prev {
 				p.prevNode[h] = node
-			} else if cmp == 0 {       // 如果相等就返回
+			} else if cmp == 0 {       // 如果相等就返回，注意，由于prev为true，我们需要一直到height高度为0，完整的构建出prevnode树才行，如果为false直接返回。
+			// 这里很有意思。。。
 				return next, true      // prevnode存储的是之前的节点的下标，因此是弄的；这里存的是要插入在之前的节点的下标，因此是next
 			}
 			if h == 0 {                // 如果高度为0，则直接返回(为什么这里返回next，因为我们会遍历0层节点到一层节点间的指针，next为可能等于的弄的)
