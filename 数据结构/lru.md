@@ -122,7 +122,7 @@ type Cache struct {
 // A Key may be any value that is comparable. See http://golang.org/ref/spec#Comparison_operators
 type Key interface{}
 
-type entry struct {
+type entry struct { // 注意变量的命名，向这个就叫做entry
    key   Key
    value interface{}
 }
@@ -146,10 +146,10 @@ func (c *Cache) Add(key Key, value interface{}) {
    }
    if ee, ok := c.cache[key]; ok {
       c.ll.MoveToFront(ee)
-      ee.Value.(*entry).value = value
+      ee.Value.(*entry).value = value  // 正时因此，这儿才能够通过更改
       return
    }
-   ele := c.ll.PushFront(&entry{key, value})
+   ele := c.ll.PushFront(&entry{key, value})  // 十分注意这里存的是实际的指针
    c.cache[key] = ele
    if c.MaxEntries != 0 && c.ll.Len() > c.MaxEntries {
       c.RemoveOldest()
