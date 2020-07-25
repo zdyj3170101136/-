@@ -51,3 +51,6 @@ func possibleBipartition() bool {
 // 而[0:]表示生成切片，毕竟slice是生成切片的
 
 https://draveness.me/golang/docs/part2-foundation/ch03-datastructure/golang-array-and-slice/
+
+#### for range循环会出现一些错误
+https://github.com/golang/go/wiki/CommonMistakes
