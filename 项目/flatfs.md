@@ -1,6 +1,9 @@
 
 
-#### datastore
+#### flatfs
+
+flatfs 对应的是key，以及[]byte切片。
+把【】byte字节流写进磁盘里。
 
 我们在一个叫做.ipfs的不可见目录下存储所有文件。
 
@@ -262,7 +265,7 @@ func (fs *Datastore) doPut(key datastore.Key, val []byte) error {
 为了防止这个目录过大。
 
 - 最多扫描2000个文件
-- 花的时间超过5s
+- 花的时间超过5min
 
 
 
