@@ -161,3 +161,43 @@ https://www.jianshu.com/p/903af75665d9
 - NB（不加，阻塞直到获得锁；不阻塞直接返回）
 
 https://zhuanlan.zhihu.com/p/25134841
+
+#### 文件删除
+
+
+
+一般来说，每个文件都有2个link计数器:i_count 和 i_link。
+
+i_count的意义是当前文件使用者（或被调用）的数量,i_link 的意义是介质连接的数量（硬链接的数量）；可以理解为i_count是内存引用计数器，i_link是磁盘的引用计数器。
+
+当一个文件被某一个进程引用时，对应i_count数就会增加；当创建文件的硬链接的时候，对应i_link数就会增加。
+————————————————
+版权声明：本文为CSDN博主「maintain001」的原创文章，遵循CC 4.0 BY-SA版权协议，转载请附上原文出处链接及本声明。
+原文链接：https://blog.csdn.net/u012999810/java/article/details/86288678
+
+
+
+- dentry建立了文件名到inode的映射关系
+- dcache是一个缓存，缓存了dentry
+
+
+
+- 我们根据文件路径从目录项缓存dcache中查找对应的目录项dentry
+- 然后根据dentry->d_inode找到对应的inode。
+- 对这个dentry unlink，然后当引用数为零时删除
+
+
+
+(1)找到文件的inode和data block(根据前一个小节中的方法寻找)；
+
+(2)将inode table中该inode记录中的data block指针删除；
+
+(3)在imap中将该文件的inode号标记为未使用；
+
+(4)在其所在目录的data block中将该文件名所在的记录行删除，删除了记录就丢失了指向inode的指针（实际上不是真的删除，直接删除的话会在目录data block的数据结构中产生空洞，所以实际的操作是将待删除文件的inode号设置为特殊的值0，这样下次新建文件时就可以重用该行记录）；
+
+(5)将bmap中data block对应的block号标记为未使用。
+
+
+
+当(2)中删除data block指针后，将无法再找到这个文件的数据；当(3)标记inode号未使用，表示该inode号可以被后续的文件重用；当(4)删除目录data block中关于该文件的记录，真正的删除文件，外界再也定位也无法看到这个文件了；当(5)标记data block为未使用后，表示开始释放空间，这些data block可以被其他文件重用。
