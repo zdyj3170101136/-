@@ -47,7 +47,7 @@ err = WriteReadme(path, fun)
 
 - put
 - delete
-- rename
+- rename(内部函数)
 
 ```
 func (fs *Datastore) doOp(oper *op) error {
@@ -408,3 +408,104 @@ func syncFile(file *os.File) error {
 }
 ```
 
+#### 接口
+
+Batch：返回一个支持批量上传以及删除文件
+
+Query查询，其实就是取出当前目录下的所有文件，迭代查询。
+
+PUT：
+
+delete：
+
+diskusage：
+
+```go
+ Batch() 
+```
+
+```go
+type flatfsBatch struct {
+   puts    map[datastore.Key][]byte
+   deletes map[datastore.Key]struct{}
+
+   ds *Datastore
+}
+
+func (fs *Datastore) Batch() (datastore.Batch, error) {
+   return &flatfsBatch{
+      puts:    make(map[datastore.Key][]byte),
+      deletes: make(map[datastore.Key]struct{}),
+      ds:      fs,
+   }, nil
+}
+
+func (bt *flatfsBatch) Put(key datastore.Key, val []byte) error {
+   if !keyIsValid(key) {
+      return fmt.Errorf("when putting '%q': %w", key, ErrInvalidKey)
+   }
+   bt.puts[key] = val
+   return nil
+}
+
+func (bt *flatfsBatch) Delete(key datastore.Key) error {
+   if keyIsValid(key) {
+      bt.deletes[key] = struct{}{}
+   } // otherwise, delete is a no-op anyways.
+   return nil
+}
+
+func (bt *flatfsBatch) Commit() error {
+   if err := bt.ds.putMany(bt.puts); err != nil {
+      return err
+   }
+
+   for k := range bt.deletes {
+      if err := bt.ds.Delete(k); err != nil {
+         return err
+      }
+   }
+
+   return nil
+}
+```
+
+
+
+以及query查询，其实就是取出当前目录下的所有文件，迭代查询。
+
+```go
+func (fs *Datastore) Query(q query.Query) (query.Results, error) {
+   prefix := datastore.NewKey(q.Prefix).String()
+   if prefix != "/" {
+      // This datastore can't include keys with multiple components.
+      // Therefore, it's always correct to return an empty result when
+      // the user requests a filter by prefix.
+      log.Warnw(
+         "flatfs was queried with a key prefix but flatfs only supports keys at the root",
+         "prefix", q.Prefix,
+         "query", q,
+      )
+      return query.ResultsWithEntries(q, nil), nil
+   }
+
+   // Replicates the logic in ResultsWithChan but actually respects calls
+   // to `Close`.
+   b := query.NewResultBuilder(q)
+   b.Process.Go(func(p goprocess.Process) {
+      err := fs.walkTopLevel(fs.path, b)
+      if err == nil {
+         return
+      }
+      select {
+      case b.Output <- query.Result{Error: errors.New("walk failed: " + err.Error())}:
+      case <-p.Closing():
+      }
+   })
+   go b.Process.CloseAfterChildren() //nolint
+
+   // We don't apply _any_ of the query logic ourselves so we'll leave it
+   // all up to the naive query engine.
+   return query.NaiveQueryApply(q, b.Results()), nil
+}
+```

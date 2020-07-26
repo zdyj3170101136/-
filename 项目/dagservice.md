@@ -11,6 +11,8 @@ type dagService struct {
 }
 ```
 
+非叶子结点最多包含 174 个 Link
+
 dagservice主要就是取出block然后把解码成merkle的node。
 
 

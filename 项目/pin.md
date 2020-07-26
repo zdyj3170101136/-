@@ -52,7 +52,7 @@ func (p *pinner) Pin(ctx context.Context, node ipld.Node, recurse bool) error {
 
 注意：：即使是recursivepin现在还没有涉及到node的child。
 
-
+#### pin状态
 
 首先对于node，我们会有pin这个操作。
 
@@ -87,7 +87,7 @@ const (
 )
 ```
 
-然后对于internal的节点，其实就是迭代的寻找link，不断的找啊找。
+迭代的寻找child
 
 
 
@@ -130,9 +130,12 @@ func hasChild(ctx context.Context, ng ipld.NodeGetter, root cid.Cid, child cid.C
 
 
 - 其实就是通过pinner得到一个gcset集合。
-
-- 然后通过blockservice返回一个馋存储的所有block的key
-- 遍历这个chan，如果在gcset之中就调用删除的接口。
+  - 从pinner得到所有recursivepin，寻找它们的child加入gcset
+  - 从bestEffortRoots，加上所有的child
+  - 加上所有directpin
+  - 加上所有internalpin，以及它们的child
+- 然后通过blockservice返回一个馋存储的所有block的key的chan，
+- 遍历这个chan，如果不在gcset之中就调用删除的接口。
 
 ```
 // GC performs a mark and sweep garbage collection of the blocks in the blockstore
@@ -236,14 +239,188 @@ func GC(ctx context.Context, bs bstore.GCBlockstore, dstor dstore.Datastore, pn 
 }
 ```
 
-#### 持久化
+#### gc和pin的冲突。
+
+gc的时候和pin的状态其实是冲突的。
+
+gc的时候不能pin对吧。
+
+pin可以同时进行。
+
+这两个都对读无影响。
+
+
+
+- gc的时候获取这个写锁
+
+- pin的时候获取读锁。
+
+  
+
+- 我们还需要一个int32位的变量。
+
+
+
+- gc的时候增加这个变量
+- 获取写锁
+- 减小这个变量（atomic）
+- 为什么要减小呢？（这是因为如果我们已经获取了写锁，那么其实之后就靠读写锁限制并发就好）
+
+
+
+#### 为什么需要这个atomic变量？
+
+比方说可能我们添加一个大文件。获取了这个读锁。
+
+然后之后我们开启了gc。
+
+这个文件可能是一个目录由很多个文件所组成。
+
+然后gc程序就不得不等待我这个大文件全部搞完后才能开始gc。
+
+
+
+所以我们获取了读锁之后，每次添加单个文件的时候，还要判断一下这个变量是否大于0。
+
+如果大于0，那么说明有gc尝试获取写锁。
+
+那我们就要释放掉我们获取的读锁。
+
+然后再去获取这个读锁。
+
+
+
+- 我们addFile的时候，先获取这个pinlock
+- 然后判断gcrequested》0,即有gc程序正在等待获取写锁
+- pin当前的root，防止被gc回收。
+- 释放之前获取的读锁
+- 再次去获取读锁
+
+
+
+#### 释放再获取为什么要这么干？
+
+这是因为写锁需要等待所有的读锁释放掉才能获取写锁。
+
+而我们重新获取读锁其实是睡眠等待这个写锁释放才能获取。
+
+意义不一样。
+
+
+
+
+
+```go
+// AddAllAndPin adds the given request's files and pin them.
+func (adder *Adder) AddAllAndPin(file files.Node) (ipld.Node, error) {
+   if adder.Pin {
+      adder.unlocker = adder.gcLocker.PinLock()
+   }
+   defer func() {
+      if adder.unlocker != nil {
+         adder.unlocker.Unlock()
+      }
+   }()
+
+   if err := adder.addFileNode("", file, true); err != nil {
+      return nil, err
+   }
+```
+
+```go
+func (adder *Adder) maybePauseForGC() error {
+   if adder.unlocker != nil && adder.gcLocker.GCRequested() {
+      rn, err := adder.curRootNode()
+      if err != nil {
+         return err
+      }
+
+      err = adder.PinRoot(rn)
+      if err != nil {
+         return err
+      }
+
+      adder.unlocker.Unlock()
+      adder.unlocker = adder.gcLocker.PinLock()
+   }
+   return nil
+}
+```
+
+```go
+// GCLocker abstract functionality to lock a blockstore when performing
+// garbage-collection operations.
+type GCLocker interface {
+   // GCLock locks the blockstore for garbage collection. No operations
+   // that expect to finish with a pin should ocurr simultaneously.
+   // Reading during GC is safe, and requires no lock.
+   GCLock() Unlocker
+
+   // PinLock locks the blockstore for sequences of puts expected to finish
+   // with a pin (before GC). Multiple put->pin sequences can write through
+   // at the same time, but no GC should happen simulatenously.
+   // Reading during Pinning is safe, and requires no lock.
+   PinLock() Unlocker
+
+   // GcRequested returns true if GCLock has been called and is waiting to
+   // take the lock
+   GCRequested() bool
+}
+```
+
+```go
+type gclocker struct {
+   lk    sync.RWMutex
+   gcreq int32
+}
+
+// Unlocker represents an object which can Unlock
+// something.
+type Unlocker interface {
+   Unlock()
+}
+
+type unlocker struct {
+   unlock func()
+}
+
+func (u *unlocker) Unlock() {
+   u.unlock()
+   u.unlock = nil // ensure its not called twice
+}
+
+func (bs *gclocker) GCLock() Unlocker {
+   atomic.AddInt32(&bs.gcreq, 1)
+   bs.lk.Lock()
+   atomic.AddInt32(&bs.gcreq, -1)
+   return &unlocker{bs.lk.Unlock}
+}
+
+func (bs *gclocker) PinLock() Unlocker {
+   bs.lk.RLock()
+   return &unlocker{bs.lk.RUnlock}
+}
+
+func (bs *gclocker) GCRequested() bool {
+   return atomic.LoadInt32(&bs.gcreq) > 0
+}
+```
+
+#### 内存set
+
+recursivePin，directpin，internalPIn这三个set。
+
+通过读写锁限制访问。
+
+
+
 由于pinner的本身是保存在内存里头的。
 
 所以我们要把它保存在磁盘里头，怎么保存呢？
 
 
 
-我们生成一个merkledag node。然后两个链接。
+我们生成一个merkledag node作为internal node，然后两个链接。
 
 - link1， 指向recursive pin的
 - Link2， 指向direct pin的
@@ -317,8 +494,140 @@ func (p *pinner) Flush(ctx context.Context) error {
 }
 ```
 
-而所有的这种internal node，都会挂在/local/pins这个node之下
+而所有的这种internal node，都会挂在/local/pins这个node之下。
 
 ```
 var pinDatastoreKey = ds.NewKey("/local/pins")
 ```
+
+这样在初始化的时候，就可以通过这个node。
+
+获得所有internal node，重建内存中的pin set。
+
+
+
+#### checkifPINED
+
+- 检查是否在这个recursivePIN这个集合中
+- 检查是否在directPin这个集合中
+- 检查是否在internalPIN这个集合中
+- 对于indirectPIN则只能遍历recursivePin的的每一个key，取出所有的graph图来。
+
+
+
+而removepin：
+
+- 从recursivepin中删除
+- 从directpin中删除
+
+
+
+所以如果一个块同时存在于两个文件中。
+
+unpin第二个文件。
+
+第一个文件的根hash还在这个recursivepin集合中。
+
+还是能够遍历得到的。
+
+
+
+还能够pin住一个文件的子快使其不被回收。
+
+但是不能够仅仅删除一个文件的子块。
+
+```
+// Unpin a given key
+func (p *pinner) Unpin(ctx context.Context, c cid.Cid, recursive bool) error {
+   p.lock.Lock()
+   defer p.lock.Unlock()
+   if p.recursePin.Has(c) {
+      if !recursive {
+         return fmt.Errorf("%s is pinned recursively", c)
+      }
+      p.recursePin.Remove(c)
+      return nil
+   }
+   if p.directPin.Has(c) {
+      p.directPin.Remove(c)
+      return nil
+   }
+   return ErrNotPinned
+}
+```
+
+```
+// isPinnedWithType is the implementation of IsPinnedWithType that does not lock.
+// intended for use by other pinned methods that already take locks
+func (p *pinner) isPinnedWithType(ctx context.Context, c cid.Cid, mode Mode) (string, bool, error) {
+   switch mode {
+   case Any, Direct, Indirect, Recursive, Internal:
+   default:
+      err := fmt.Errorf("invalid Pin Mode '%d', must be one of {%d, %d, %d, %d, %d}",
+         mode, Direct, Indirect, Recursive, Internal, Any)
+      return "", false, err
+   }
+   if (mode == Recursive || mode == Any) && p.recursePin.Has(c) {
+      return linkRecursive, true, nil
+   }
+   if mode == Recursive {
+      return "", false, nil
+   }
+
+   if (mode == Direct || mode == Any) && p.directPin.Has(c) {
+      return linkDirect, true, nil
+   }
+   if mode == Direct {
+      return "", false, nil
+   }
+
+   if (mode == Internal || mode == Any) && p.isInternalPin(c) {
+      return linkInternal, true, nil
+   }
+   if mode == Internal {
+      return "", false, nil
+   }
+
+   // Default is Indirect
+   visitedSet := cid.NewSet()
+   for _, rc := range p.recursePin.Keys() {
+      has, err := hasChild(ctx, p.dserv, rc, c, visitedSet.Visit)
+      if err != nil {
+         return "", false, err
+      }
+      if has {
+         return rc.String(), true, nil
+      }
+   }
+   return "", false, nil
+}
+```
+
+#### gc本身其实是异步的。
+
+它会用一个chan返回result。
+
+
+
+命令行外部调用的直接返回这个chan就行。
+
+如果是内部的话，就需要等待这个result全部完毕。
+
+```go
+// DefaultDatastoreConfig is an internal function exported to aid in testing.
+func DefaultDatastoreConfig() Datastore {
+   return Datastore{
+      StorageMax:         "10GB",
+      StorageGCWatermark: 90, // 90%
+      GCPeriod:           "1h",
+      BloomFilterSize:    0,
+```
+
+
+
+- 定时gc：每1h一次，调用maybegc
+- conditionalgc：调用maybegc
+
+
+
+- maybegc，是一个storage通常最大容量是10gb，然后有一个高水位：如果超过90%那么就会开启gc。
