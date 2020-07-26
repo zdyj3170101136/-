@@ -60,6 +60,7 @@ func (p *pinner) Pin(ctx context.Context, node ipld.Node, recurse bool) error {
 - inderect表示这个node是被递归的pin了，因为它有祖先是已经被recursive递归的pin的文件
 - notpinned表示没有被pin的文件
 - recursive表示node本身被pin加上所有的子node
+- internal表示内部的node
 
 我们从pin的状态中
 
@@ -233,4 +234,91 @@ func GC(ctx context.Context, bs bstore.GCBlockstore, dstor dstore.Datastore, pn 
 
    return output
 }
+```
+
+#### 持久化
+由于pinner的本身是保存在内存里头的。
+
+所以我们要把它保存在磁盘里头，怎么保存呢？
+
+
+
+我们生成一个merkledag node。然后两个链接。
+
+- link1， 指向recursive pin的
+- Link2， 指向direct pin的
+- 然后把这个node本身使用dagservice存到里头去。
+
+```go
+// Flush encodes and writes pinner keysets to the datastore
+func (p *pinner) Flush(ctx context.Context) error {
+   p.lock.Lock()
+   defer p.lock.Unlock()
+
+   internalset := cid.NewSet()
+   recordInternal := internalset.Add
+
+   root := &mdag.ProtoNode{}
+   {
+      n, err := storeSet(ctx, p.internal, p.directPin.Keys(), recordInternal)
+      if err != nil {
+         return err
+      }
+      if err := root.AddNodeLink(linkDirect, n); err != nil {
+         return err
+      }
+   }
+
+   {
+      n, err := storeSet(ctx, p.internal, p.recursePin.Keys(), recordInternal)
+      if err != nil {
+         return err
+      }
+      if err := root.AddNodeLink(linkRecursive, n); err != nil {
+         return err
+      }
+   }
+
+   // add the empty node, its referenced by the pin sets but never created
+   err := p.internal.Add(ctx, new(mdag.ProtoNode))
+   if err != nil {
+      return err
+   }
+
+   err = p.internal.Add(ctx, root)
+   if err != nil {
+      return err
+   }
+
+   k := root.Cid()
+
+   internalset.Add(k)
+
+   if syncDServ, ok := p.dserv.(syncDAGService); ok {
+      if err := syncDServ.Sync(); err != nil {
+         return fmt.Errorf("cannot sync pinned data: %v", err)
+      }
+   }
+
+   if syncInternal, ok := p.internal.(syncDAGService); ok {
+      if err := syncInternal.Sync(); err != nil {
+         return fmt.Errorf("cannot sync pinning data: %v", err)
+      }
+   }
+
+   if err := p.dstore.Put(pinDatastoreKey, k.Bytes()); err != nil {
+      return fmt.Errorf("cannot store pin state: %v", err)
+   }
+   if err := p.dstore.Sync(pinDatastoreKey); err != nil {
+      return fmt.Errorf("cannot sync pin state: %v", err)
+   }
+   p.internalPin = internalset
+   return nil
+}
+```
+
+而所有的这种internal node，都会挂在/local/pins这个node之下
+
+```
+var pinDatastoreKey = ds.NewKey("/local/pins")
 ```
