@@ -34,7 +34,7 @@ ip中的校验和只对ip首部。
 
 icmp覆盖整个icmp报文（icmp头部加数据）
 
-tcp/udp对整个tcp报文加上为首部校验。（udp检验和可选）
+tcp/udp对整个tcp报文加上为首部校验。（udp检验和可选）（五元组）
 
 
 
