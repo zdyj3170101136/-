@@ -330,7 +330,23 @@ SIGTERM （默认，自行关闭-15）
 
 SIGHLD：告诉父进程自己已经被终止
 
+kill
 
+- -l1) SIGHUP
+
+-  2) *SIGINT
+
+- \#define SIGSEGV 11
+
+  \#define SIGPIPE 13
+
+  define SIGCHLD 17
+
+- CONT  18   继续（与STOP相反， fg/bg命令）
+
+  STOP   19   暂停（同 Ctrl + Z）
+
+  
 
 实际会从管道中接受sigint，sigterm，sighup三个信号量。
 
