@@ -86,7 +86,7 @@ func (d *Datastore) runOp(op func() error) error {
 
 
 
-缓存的话是key - 是否存在，或者大小。
+缓存的话是key - 是否存在，或者大小。（方便GETSIZE函数）
 
 
 
@@ -209,7 +209,11 @@ func (b *bloomcache) Has(k cid.Cid) (bool, error) {
 
 get的时候同理，过滤掉不可能的请求。
 
+
+
 而对于put的时候，就向bloom过滤器里头加上这个值。
+
+因为有可能不存在，因此没必要做判断。
 
 ```
 func (b *bloomcache) Get(k cid.Cid) (blocks.Block, error) {

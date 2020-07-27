@@ -187,12 +187,15 @@ func NextToLast(suffixLen int) *ShardIdV1 {
 #### PUT 函数 block流程
 
 - 在当前目录下建立一个“put-”的临时文件。
-
 - 把内容写到临时文件里头去。
 - 关闭临时文件
 - 然后rename临时文件
 - 最后syncdir
 - 使用一个defer函数，用于当临时文件没有关闭或者没有removed的时候关闭或者removed。
+
+closed是当我们这个写入临时文件出错，就会直接返回，没有关闭。
+
+rename失败就没有remove。
 
 ```
 func (fs *Datastore) doPut(key datastore.Key, val []byte) error {
@@ -279,7 +282,7 @@ func (fs *Datastore) doPut(key datastore.Key, val []byte) error {
 
 随后开启一个goroutine， 循环阻塞在两个chan上面。
 
-- 一个是定时器管道， 2s。
+- 一个是定时器管道， 2s。（如果是dirty有脏数据）
 - 一个是struct{}管道
 
 当我们创建新的目录
@@ -287,6 +290,12 @@ func (fs *Datastore) doPut(key datastore.Key, val []byte) error {
 或者建立一个新的文件的时候
 
 或者删除一个旧文件就会往这个管道中赛值。
+
+
+
+它会把当前的标志位设为dirty，表示有脏数据。
+
+
 
 然后有一个变量叫做diskusage（内存中），我们atomic原子操作改变它的值。
 
@@ -369,6 +378,8 @@ func (fs *Datastore) checkpointLoop() {
 
 
 保证最多16个线程在对这个磁盘做sync操作，其他的都会睡眠等待。
+
+注意在windos下不需要syncdir。
 
 ```
 // don't block more than 16 threads on sync opearation

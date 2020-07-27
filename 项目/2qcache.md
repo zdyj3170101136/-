@@ -137,7 +137,19 @@ func (c *TwoQueueCache) ensureSpace(recentEvict bool) {
 }
 ```
 
+#### 什么情况下
 
+当recent链表太多，多余的会被送到recentevicted链表。
+
+
+
+这个时候get不会从这个recentevicted链表之中取出值。
+
+但是put的时候会尝试把这个recentevicted提升到frequent。
+
+
+
+- 
 
 #### 链表大小设置
 
