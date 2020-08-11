@@ -1,4 +1,4 @@
-## Tcp
+Tcp
 
 Transmission control protocol(运输控制协议)
 
@@ -11,6 +11,10 @@ Transmission control protocol(运输控制协议)
 注意接收方接收到ack后才会进入establish状态
 
 注意两边都能主动关闭，主动的变成fin_wait1状态，被动的变成close_wait状态
+
+
+
+注意先close——wait后last——ack，毕竟last对吧。
 
 #### 格式
 
@@ -372,6 +376,8 @@ MSSIND为MSS对应的索引。
 
 
 
+- 注意快速恢复状态的cwnd不是一，而是ssthresh的一半。
+
 二，拥塞避免，
 
 每个RTT只将cwnd增加一个MSS。（通过对一个让rtt内发送的十个则一个ack只增长mss /10）
@@ -405,7 +411,7 @@ tcp重传丢失的数据，如果只收到DUPACK，那么每个增加一个MSS�
 
 ![截屏2020-06-17 下午5.47.52](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-06-17 下午5.47.52.png)
 
-#### 同时打开，同时关闭
+#### 同时打开，同时关闭（希望能够主动回答）
 
 同时打开：两边同时发动SYN和SYNACK，建立了一条连接。
 

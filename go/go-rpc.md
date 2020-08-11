@@ -1,4 +1,6 @@
 ```
+
+
 // Call represents an active RPC.
 type Call struct {
    ServiceMethod string      // The name of the service and method to call.
@@ -8,6 +10,16 @@ type Call struct {
    Done          chan *Call  // Strobes when call is complete.
 }
 ```
+
+#### rpc远程过程调用
+
+- 重发请求信息（是否重发请求，直到接受到应答）
+- 过滤重复请求
+- 重传结果（是否保存历史，以重传丢失的结果）
+
+
+
+- 考虑到服务器失效或者由于远程服务器的故障
 
 #### call结构体
 
@@ -70,12 +82,14 @@ io.WriteString(conn, "CONNECT "+path+" HTTP/1.0\n\n")
   ```
 
   - 收到response后，
-
-  - 从response的header中解出sequence，找到对应的map里头的call结构体。
-
+- 从response的header中解出sequence，找到对应的map里头的call结构体。
   - 然后把resonse返回值解码到对应的call。
+- 最后往call里头的done 这个chan发送call自己
 
-  - 最后往call里头的done 这个chan发送call自己
+
+
+- 如果找不到对应的call结构体，说明writeReuquest部分失败，server端告诉我们读取body的时候失败
+- 收到error之后就关关掉所有pendding的请求。
 
 ```
 func (client *Client) input() {

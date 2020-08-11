@@ -70,7 +70,7 @@ func (m *Map) Get(key string) string {
       return ""
    }
 
-   hash := int(m.hash([]byte(key)))
+   hash := int(m.hash([]byte(key))) // 注意[]byte转换成int，因为hash函数是uint32。
 
    // Binary search for appropriate replica.
    idx := sort.Search(len(m.keys), func(i int) bool { return m.keys[i] >= hash })

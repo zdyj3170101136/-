@@ -506,6 +506,21 @@ var pinDatastoreKey = ds.NewKey("/local/pins")
 
 
 
+#### add
+
+#### addFileNode
+
+会maybepauseforgc
+
+
+
+- 调用addFile， 文件切块，layout然后bufferdag commit
+- 调用addDir
+
+#### 最后
+
+- pin and flush pin
+
 #### checkifPINED
 
 - 检查是否在这个recursivePIN这个集合中
@@ -631,3 +646,9 @@ func DefaultDatastoreConfig() Datastore {
 
 
 - maybegc，是一个storage通常最大容量是10gb，然后有一个高水位：如果超过90%那么就会开启gc。
+
+
+
+- 当我们添加单个文件的时候，我们会maybePauseForGC
+- 在文件的粒度上面检查
+- 注意addDir也包括文件

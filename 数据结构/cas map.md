@@ -82,7 +82,7 @@ func (b *mBucket) get(r *Cache, h *mNode, hash uint32, key uint64, noset bool) (
    b.mu.Unlock()  // 提早释放锁
 
    // Update counter.
-   grow := atomic.AddInt32(&r.nodes, 1) >= h.growThreshold
+   grow := atomic.AddInt32(&r.nodes, 1) >= h.growThreshold // cache里头存储node的总数
 
    // Grow.
    // 这样，旧的mnode是1，就无法对它进行resize。
@@ -91,7 +91,7 @@ func (b *mBucket) get(r *Cache, h *mNode, hash uint32, key uint64, noset bool) (
 
       // 生成一个新的mnode，并且用cas操作改变cache的指向
       // 旧的cas
-      nhLen := len(h.buckets) << 1
+      nhLen := len(h.buckets) << 1 // node height len
       nh := &mNode{
          buckets:         make([]unsafe.Pointer, nhLen),
          mask:            uint32(nhLen) - 1,

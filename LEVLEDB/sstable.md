@@ -2,6 +2,13 @@
 
 #### sstable
 
+
+
+1. 第0层的sstable在4M左右;
+2. 第i（i> 0）层的sstable每个sstable最大空间不超过2M;
+
+
+
 sstable 是memtable经过minor compaction生成的磁盘数据。
 
 - 避免日志文件过大
@@ -88,9 +95,12 @@ filter block主要是每2kb放一个过滤器存放数据。
 
 
 
-footer 报考meta index和index的偏移量。
+footer 报考
 
-以及magic word。
+- meta inde
+- index的偏移量。
+
+- magic word。
 
 
 
@@ -125,6 +135,7 @@ cache
 - 元数据一起存储
 - 引用计数实现无锁并发
 - cache中的数据永远一致。
+- sstable有版本号
 
 
 

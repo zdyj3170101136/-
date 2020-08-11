@@ -18,8 +18,6 @@ var (
    // Remember, you have a total 22 bits to share between Node/Step
    StepBits uint8 = 12   // 12位是每一秒内的id
    
-   nodeMax   int64 = -1 ^ (-1 << NodeBits) // -1 左移十位，说明低10个低bit的0，最后取反，10个低bit的1
-   nodeMask        = nodeMax << StepBits   // nodemask表示从13位到23位都是连续的1
    stepMask  int64 = -1 ^ (-1 << StepBits) // 表示低位有12个连续的1
    timeShift       = NodeBits + StepBits   // 左移动10位加上12位为time
    nodeShift       = StepBits              // 左移动12位为nodeshift

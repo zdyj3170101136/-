@@ -1,6 +1,13 @@
-
-
 #### flatfs
+
+存储kv数据。
+
+
+
+- 在此文件下存储，挂在的文件系统的路径以及类型
+- 
+
+![截屏2020-07-30 下午8.25.17](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-30 下午8.25.17.png)
 
 flatfs 对应的是key，以及[]byte切片。
 把【】byte字节流写进磁盘里。
@@ -42,6 +49,39 @@ err = WriteReadme(path, fun)
 包含操作的type，key，value，tmp临时文件名，path以及真实文件名。
 
 
+
+#### put
+
+put会retry六次，仅仅当err为too many open files（仅仅对put做retry）。
+
+
+
+**too many open files**(打开的文件过多)是Linux系统中常见的错误，从字面意思上看就是说程序打开的文件数过多，不过这里的files不单是文件的意思，也包括打开的通讯链接(**比如socket**)，正在监听的端口等等，所以有时候也可以叫做**句柄**(handle)，这个错误通常也可以叫做句柄数超出系统限制。
+引起的原因就是进程在某个时刻打开了超过系统限制的文件数量以及通讯链接数，通过命令ulimit -a可以查看当前系统设置的最大句柄数是多少：
+
+
+
+
+
+```go
+for i := 1; i <= putMaxRetries; i++ {
+   err = fs.doWriteOp(&op{
+      typ: opPut,
+      key: key,
+      v:   value,
+   })
+   if err == nil {
+      break
+   }
+
+   if !strings.Contains(err.Error(), "too many open files") {
+      break
+   }
+
+   log.Errorf("too many open files, retrying in %dms", 100*i)
+   time.Sleep(time.Millisecond * 100 * time.Duration(i))
+}
+```
 
 然后根据operation这个结构体的类型内部去调用不同的函数
 
@@ -188,6 +228,7 @@ func NextToLast(suffixLen int) *ShardIdV1 {
 
 - 在当前目录下建立一个“put-”的临时文件。
 - 把内容写到临时文件里头去。
+- sync临时文件
 - 关闭临时文件
 - 然后rename临时文件
 - 最后syncdir
@@ -195,7 +236,65 @@ func NextToLast(suffixLen int) *ShardIdV1 {
 
 closed是当我们这个写入临时文件出错，就会直接返回，没有关闭。
 
-rename失败就没有remove。
+Removed失败就没有remove。
+
+
+
+
+
+```go
+err := os.Mkdir(path, 0755)
+```
+
+- 临时文件会在当前的pattern后加随机数
+
+- 打开的临时文件具有以下特性 可读写 ｜ 不存在会创建 ｜ 必须不存在 ｜ 权限为0600
+
+- 其他用户没有权限去读取。
+
+- 而get通过open语意创建的是只读的，且权限为0的文件
+
+- ```go
+  // Open opens the named file for reading. If successful, methods on
+  // the returned file can be used for reading; the associated file
+  // descriptor has mode O_RDONLY.
+  // If there is an error, it will be of type *PathError.
+  func Open(name string) (*File, error) {
+     return OpenFile(name, O_RDONLY, 0)
+  }
+  ```
+
+```go
+func TempFile(dir, pattern string) (f *os.File, err error) {
+	if dir == "" {
+		dir = os.TempDir()
+	}
+
+	var prefix, suffix string
+	if pos := strings.LastIndex(pattern, "*"); pos != -1 {
+		prefix, suffix = pattern[:pos], pattern[pos+1:]
+	} else {
+		prefix = pattern
+	}
+
+	nconflict := 0
+	for i := 0; i < 10000; i++ {
+		name := filepath.Join(dir, prefix+nextRandom()+suffix)
+		f, err = os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
+		if os.IsExist(err) {
+			if nconflict++; nconflict > 10 {
+				randmu.Lock()
+				rand = reseed()
+				randmu.Unlock()
+			}
+			continue
+		}
+		break
+	}
+	return
+}
+
+```
 
 ```
 func (fs *Datastore) doPut(key datastore.Key, val []byte) error {
@@ -280,7 +379,19 @@ func (fs *Datastore) doPut(key datastore.Key, val []byte) error {
 
 
 
+```go
+第一个`flush`会简单地将程序缓冲区中残留的所有数据写到实际文件中。通常，这意味着数据将从程序缓冲区复制到操作系统缓冲区。
+
+具体来说，这意味着如果另一个进程打开了要读取的相同文件，它将能够访问刚刷新到该文件的数据。但是，这不一定意味着它已“永久”存储在磁盘上。
+
+为此，您需要调用该`os.fsync`方法以确保所有操作系统缓冲区均与其所使用的存储设备同步，换句话说，该方法会将数据从操作系统缓冲区复制到磁盘。
+
+通常，您无需为这两种方法烦恼，但是如果您处于对最终存储在磁盘上的偏执狂抱有好感的情况下，则应按照指示进行两次调用。
+
 随后开启一个goroutine， 循环阻塞在两个chan上面。
+
+- 
+```
 
 - 一个是定时器管道， 2s。（如果是dirty有脏数据）
 - 一个是struct{}管道
@@ -301,11 +412,27 @@ func (fs *Datastore) doPut(key datastore.Key, val []byte) error {
 
 （然后如果这段时间， 这个改变量超过百分之一， 我们就更新磁盘里头的文件存储的值）。
 
+- 如果改变量没有超过百分之一，我们就reset定时器，让它在2s后超时。
+- 确保2s后会刷到此磁盘
+
+
+
+- dirty：表示当前内存中的磁盘使用量是否与硬盘中的一致
+- timerActive：表示定时器是否活跃。
+
+
+
+- 为什么定时器不改成周期性的？（减小消耗？）
+- dirty这个标志位是没有互斥锁来限制的（因为只会被单一线程调用，checkpointLoop）
+- fs.diskUsage不用互斥量（atomic操作效率更高，而且读写锁写请求会阻塞读请求，读请求也会阻塞写请求）。
+
 
 
 - 创建一个叫做du-的临时文件
 - 往里头写进json序列化的精确级别以及估计的字节大小。
 - 然后改变文件名
+- 为了防止刷到磁盘消耗能量，只有开启和close的时候才会sync到磁盘里头，其他情况下只是写到内存的文件里头。
+- 然后等待后台缓冲区溢出再输到磁盘。
 
 ```
 func (fs *Datastore) checkpointDiskUsage() {

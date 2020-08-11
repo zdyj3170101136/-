@@ -106,6 +106,7 @@ func (t *Tree) insert(node *Node, key int,  priority int) *Node {
       return node
    }
    if node.key < key {
+   // 注意这里的判等
       node.right = t.insert(node.right, key, priority)
       if node.right.priority < node.priority {
          return t.rightRotate(node)

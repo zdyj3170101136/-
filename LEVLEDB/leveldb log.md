@@ -100,6 +100,8 @@ batch为key， 而memedb为sequence number。
 
 
 
+（和internalkey不同的是没有key和value的大小。以及对应的type）
+
 - 其中internal key len不仅包括key的大小，还是internal key的大小（每条数据项额外8个字节）
 
 ```

@@ -293,7 +293,7 @@ func New(capacity int) *DB {
 
 func (p *DB) randHeight() (h int) {
 	const branching = 4
-	h = 1
+	h = 1 // 从1开始
 	for h < tMaxHeight && p.rnd.Int()%branching == 0 {
 		// 生成随机数，0，1，2，3。四分之一的概率增加
 		h++
@@ -346,7 +346,7 @@ func (p *DB) Put(key []byte, value []byte) error {
 		p.kvData = append(p.kvData, key...)
 		p.kvData = append(p.kvData, value...)
 		p.nodeData[node] = kvOffset               // 更新偏移量
-		m := p.nodeData[node+nVal]                // 更新value的元数据, 别忘了
+		m := p.nodeData[node+nVal]                // 更新value的元数据, 别忘了, 注意这里不会附加key的元数据，因为不变。
 		p.nodeData[node+nVal] = len(value)        // 更新kvsize的大小
 		p.kvSize += len(value) - m                // 我们只记录最新的（这就是kvsize的来源）
 		return nil
@@ -359,7 +359,6 @@ func (p *DB) Put(key []byte, value []byte) error {
 		}
 		p.maxHeight = h
 	}
-	fmt.Println(h)
 
 	kvOffset := len(p.kvData)
 	p.kvData = append(p.kvData, key...)
@@ -370,7 +369,7 @@ func (p *DB) Put(key []byte, value []byte) error {
 	for i, n := range p.prevNode[:h] {     // 如果height为1，就只有一个节点
 		m := n + nNext + i                 // i表示高度，说明对于第n个node，它的第i位置插入一个元素
 		p.nodeData = append(p.nodeData, p.nodeData[m])  // 当前node插入在prevnode和prevnode之前的node， 至少也会有一个为0,容易忘记！！！
-		p.nodeData[m] = node
+		p.nodeData[m] = node // 这里也很重要，容易忘记
 	}
 
 	p.kvSize += len(key) + len(value)       // 增加大小
@@ -386,7 +385,7 @@ func (p *DB) Put(key []byte, value []byte) error {
 func (p *DB) Get(key []byte) (value []byte, err error) {
 	p.mu.RLock()   // 加读锁
 	if node, exact := p.findGE(key, false); exact { // 重点是对exact的判断
-		o := p.nodeData[node] + p.nodeData[node+nKey]
+		o := p.nodeData[node] + p.nodeData[node+nKey] // 这里很重要，读出来offset之后加上key的长度，因为我们要读出来的是value。对吧
 		value = p.kvData[o : o+p.nodeData[node+nVal]]
 	} else {
 		err = ErrNotFound

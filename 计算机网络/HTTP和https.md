@@ -167,7 +167,7 @@ Upgrade-Insecure-requests
 
 Strict-Transport-Security
 
-#### xss
+#### xss（重要）
 
 CONTENT-SECURITY-POLICY（只能执行的脚本和网页）（xss攻击）
 
@@ -325,6 +325,10 @@ CHANGECIPHERSPEC：表示之后的信息都是加密的
 五，然后服务器和各户端各自从主密钥，通过三个随机数计算出四个密钥。
 
 
+
+证书包括url，服务器公钥，过期时间
+
+![截屏2020-08-04 下午6.51.38](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-08-04 下午6.51.38.png)
 
 FINISHED客户端发送所有握手报文的一个mac（第一条加密，证明自己拥有密钥，因为服务端可以对数据进行校验，判断对面是否有）（关键在于finished的作用）
 
@@ -501,6 +505,31 @@ bom用于标记字节序。
 
 ![截屏2020-07-13 上午10.52.06](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-13 上午10.52.06.png)
 
+#### header方法
+
+GET: 获取资源###
+HEAD: 获取报文头部###
+POST: 传输实体主体###
+PUT: 传输文件###
+DELETE: 删除文件###
+OPTIONS: 询问支持方法####
+GET : 获取资源
+
+
+
+对的，PUT的方法就是其字面表意，将client的资源放在请求URI上。对于服务器到底是创建还是更新，由服务器返回的HTTP Code来区别。
+
+put和DELETE是一等的。
+
+注：通过上面可以知道，如果用PUT来达到更改资源，需要client提交资源全部信息，如果只有部分信息，不应该使用PUT（因为服务器使用client提交的对象整体替换服务器的资源）。
+
+
+
+作者：知乎用户
+链接：https://www.zhihu.com/question/48482736/answer/139024541
+来源：知乎
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+
 #### status
 
 100 continue：可以处理请求
@@ -515,7 +544,7 @@ bom用于标记字节序。
 
 
 
-301:永久性转移
+301:永久性转移（服务器会缓存请求）
 
 302：暂时性转移（会把post请求重定向到get）（服务端location字段返回用于重新填充的uri）
 304:已缓存（重定向）
@@ -707,3 +736,20 @@ https://yq.aliyun.com/articles/670717
 *302代表什么？*
 302代表的是临时定向。什么意思呢?
 对于GET请求, 302跳转默认不会被浏览器缓存，除非在HTTP响应中通过 Cache-Control 或 Expires 暗示浏览器缓存。因此，用户每次访问同一短链接地址，浏览器都会去短链接系统上取。
+
+
+
+#### https
+
+1、当小红第一次使用 iMeesage 的时候，小红 iPhone 上的 iMessage 客户端会生成一对公钥私钥，然后把私钥好好保存，公钥发给苹果服务器。
+
+2、当小明要给小红发 iMessage 消息的时候，会问苹果服务器拿到小红之前发的公钥。
+
+3、然后小明写好消息，点发送键的时候，小明的 iPhone 上的 iMessage 客户端会用小红的公钥加密刚刚写好的这条消息，然后再把加密过的密文上传给苹果服务器。
+
+4、当小红登陆，从苹果拿回小明发送的加密的消息之后，小红的 iPhone 的 iMessage 客户端，会拿本地之前生成的私钥解密，然后小红就可以在 iPhone 屏幕上看到小明说了什么。
+
+
+
+https://daily.zhihu.com/story/4578213
+

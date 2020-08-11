@@ -276,6 +276,8 @@ history
 
 查看和文件系统有关的知识
 
+文件系统类型 ｜ 512-blocks的大小 ｜ 已经使用的 ｜ 还可以用的 ｜ 已用容量 ｜ inode数量 ｜ inode空闲
+
 #### find
 
 find查找文件，打印出找到的所有文件
@@ -393,7 +395,7 @@ ps -aux 所有信息
 
 ![截屏2020-06-21 下午9.02.55](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-06-21 下午9.02.55.png)
 
-User 拥有者 CPU cpu占用百分比 物理内存百分比 虚拟内存 实际物理内存
+User 拥有者 | pid |  CPU cpu占用百分比 物理内存百分比 虚拟内存 实际物理内存 | stat 状态（s表示高优先级） ｜ 启动时间 ｜ 已运行时间 ｜ 启动时候的命令
 
 TT （依赖于哪个终端）
 
@@ -406,6 +408,8 @@ D：不可中断（kill无法杀死）
 T(停止状态)
 
 Z：僵尸进程，进程终止，但描述符美食坊）
+
+![截屏2020-07-29 下午9.06.53](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-29 下午9.06.53.png)
 
 #### top
 
@@ -539,7 +543,7 @@ ctrl + q恢复滚动
 
 -i 查看port，协议 ， 4 ip4。
 
-显示 device号 size inode号 fd文件描述符![截屏2020-06-21 下午9.20.00](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-06-21 下午9.20.00.png)
+命令 ｜ pid ｜ 拥有者 ｜ 文件类型 ｜ 蛇柏豪 ｜ 大小和偏移量 ｜ 显示 device号 size inode号 fd文件描述符![截屏2020-06-21 下午9.20.00](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-06-21 下午9.20.00.png)
 
 #### shutdoen
 
@@ -566,6 +570,8 @@ netstat查看网络情况
   ```
 
 ![截屏2020-07-08 下午2.52.06](/Users/jieyang/Desktop/截屏2020-07-08 下午2.52.06.png)
+
+
 
 ### 42、大文件
 

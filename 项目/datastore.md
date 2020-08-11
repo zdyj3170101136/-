@@ -47,6 +47,30 @@ func CachedBlockstore(
 - 最多重试6次
 - 每次失败，睡眠200ms；第一次失败睡眠200ms，第二次就是400，一个线性的函数。
 
+
+
+我们会把对flatfs层执行的操作包装成一个函数。
+
+- 函数称为operation的err
+- retry层的核心是一个runOp()的函数。
+- 它执行operation这个函数。
+- 然后如果是临时错误的话就会重试。
+- **EMFILE Too many open files 24**
+- 如果是因为打开的文件太多而导致的，那么将会进行重试
+
+
+
+```go
+func isTooManyFDError(err error) bool {
+   perr, ok := err.(*os.PathError)
+   if ok && perr.Err == syscall.EMFILE {
+      return true
+   }
+
+   return false
+}
+```
+
 ```
 rds := &retrystore.Datastore{
    Batching:    repo.Datastore(),
@@ -232,4 +256,306 @@ func (b *bloomcache) Put(bl blocks.Block) error {
    }
    return err
 }
+```
+
+#### BATCH
+
+- 事实上我们对于一个文件的添加使用的dagService称做是bufferDag
+- 里头有一个batch叫做批处理
+- 操作都是在这个请求里头缓冲。
+- 然后最后才commit。
+- 也就是说缓冲写操作，读操作立即执行。
+- remove操作也是立即执行。
+- 不过写操作也不是无限缓冲，当大小大于8 << 20字节，或者是超过128个node之后就会自动的asyncCommit。
+
+
+
+- 最大的commit的线程数量为逻辑cpu的个数 * 2，intel corei7上是8个。
+- asyncCommit会开启一个协程，然后把当前的这个上下文，还有要写的节点复制进去。
+- 以及一个chan，用来返回result的。
+- 注意batch这个结构体是对单个文件的（也就是一个目录可能下面很多个文件）
+
+
+
+- 虽然是axynccommit
+- 但是Commit这个函数本身是同步的。
+
+```go
+// Constructs a node from reader's data, and adds it. Doesn't pin.
+func (adder *Adder) add(reader io.Reader) (ipld.Node, error) {
+   chnk, err := chunker.FromString(reader, adder.Chunker)
+   if err != nil {
+      return nil, err
+   }
+
+   params := ihelper.DagBuilderParams{
+      Dagserv:    adder.bufferedDS,
+      RawLeaves:  adder.RawLeaves,
+      Maxlinks:   ihelper.DefaultLinksPerBlock,
+      NoCopy:     adder.NoCopy,
+      CidBuilder: adder.CidBuilder,
+   }
+
+   db, err := params.New(chnk)
+   if err != nil {
+      return nil, err
+   }
+   var nd ipld.Node
+   if adder.Trickle {
+      nd, err = trickle.Layout(db)
+   } else {
+      nd, err = balanced.Layout(db)
+   }
+   if err != nil {
+      return nil, err
+   }
+
+   return nd, adder.bufferedDS.Commit()
+}
+```
+
+
+
+```go
+// Commit commits batched nodes.
+func (t *Batch) Commit() error {
+   if t.err != nil {
+      return t.err
+   }
+
+   t.asyncCommit()
+
+loop:
+   for t.activeCommits > 0 {
+      select {
+      case err := <-t.commitResults:
+         t.activeCommits--
+         if err != nil {
+            t.setError(err)
+            break loop
+         }
+      case <-t.ctx.Done():
+         t.setError(t.ctx.Err())
+         break loop
+      }
+   }
+
+   return t.err
+}
+```
+
+```go
+// ParallelBatchCommits is the number of batch commits that can be in-flight before blocking.
+// TODO(ipfs/go-ipfs#4299): Experiment with multiple datastores, storage
+// devices, and CPUs to find the right value/formula.
+var ParallelBatchCommits = runtime.NumCPU() * 2
+```
+
+```go
+var defaultBatchOptions = batchOptions{
+   maxSize: 8 << 20, // 也就是8M
+
+   // By default, only batch up to 128 nodes at a time.
+   // The current implementation of flatfs opens this many file
+   // descriptors at the same time for the optimized batch write.
+   maxNodes: 128,
+}
+```
+
+```go
+// Get commits and gets a node from the DAGService.
+func (bd *BufferedDAG) Get(ctx context.Context, c cid.Cid) (Node, error) {
+   err := bd.b.Commit()
+   if err != nil {
+      return nil, err
+   }
+   return bd.ds.Get(ctx, c)
+}
+```
+
+```go
+// BufferedDAG implements DAGService using a Batch NodeAdder to wrap add
+// operations in the given DAGService. It will trigger Commit() before any
+// non-Add operations, but otherwise calling Commit() is left to the user.
+type BufferedDAG struct {
+   ds DAGService
+   b  *Batch
+}
+
+// NewBufferedDAG creates a BufferedDAG using the given DAGService and the
+// given options for the Batch NodeAdder.
+func NewBufferedDAG(ctx context.Context, ds DAGService, opts ...BatchOption) *BufferedDAG {
+   return &BufferedDAG{
+      ds: ds,
+      b:  NewBatch(ctx, ds, opts...),
+   }
+}
+```
+
+
+
+```go
+// AddMany many calls Add for every given Node, thus batching and
+// commiting them as needed.
+func (t *Batch) AddMany(ctx context.Context, nodes []Node) error {
+   if t.err != nil {
+      return t.err
+   }
+   // Not strictly necessary but allows us to catch errors early.
+   t.processResults()
+
+   if t.err != nil {
+      return t.err
+   }
+
+   t.nodes = append(t.nodes, nodes...)
+   for _, nd := range nodes {
+      t.size += len(nd.RawData())
+   }
+
+   if t.size > t.opts.maxSize || len(t.nodes) > t.opts.maxNodes {
+      t.asyncCommit()
+   }
+   return t.err
+}
+```
+
+
+
+- aysncCommitt后分配的切片的大小初始化不为0.。。
+- 注意如果直接添加16m的数据，是不会开启两个线程去commit
+- 而是会开启一个线程对16m的数据做commit（不过我们是一个个添加块的所以不会出现这种操作）
+
+```
+func (t *Batch) asyncCommit() {
+   numBlocks := len(t.nodes)
+   if numBlocks == 0 {
+      return
+   }
+   if t.activeCommits >= ParallelBatchCommits {
+      select {
+      case err := <-t.commitResults:
+         t.activeCommits--
+
+         if err != nil {
+            t.setError(err)
+            return
+         }
+      case <-t.ctx.Done():
+         t.setError(t.ctx.Err())
+         return
+      }
+   }
+   go func(ctx context.Context, b []Node, result chan error, na NodeAdder) {
+      select {
+      case result <- na.AddMany(ctx, b):
+      case <-ctx.Done():
+      }
+   }(t.ctx, t.nodes, t.commitResults, t.na)
+
+   t.activeCommits++
+   t.nodes = make([]Node, 0, numBlocks)
+   t.size = 0
+
+   return
+}
+```
+
+
+
+#### 如何显示进度条
+
+```go
+func (adder *Adder) addFile(path string, file files.File) error {
+   // if the progress flag was specified, wrap the file so that we can send
+   // progress updates to the client (over the output channel)
+   var reader io.Reader = file
+   if adder.Progress {
+      rdr := &progressReader{file: reader, path: path, out: adder.Out}
+      if fi, ok := file.(files.FileInfo); ok {
+         reader = &progressReader2{rdr, fi}
+      } else {
+         reader = rdr
+      }
+   }
+```
+
+
+
+当我们从文件中读取文件的时候。
+
+我们先把它包装成一个progressReader这么一个结构体。
+
+后面chunker分块的时候读取也是从这里读取。
+
+- 作用就是每读取256kb（1024 * 256 字节）的时候就会往一个管道里面塞一个结构体
+- 包括当前已经从这个文件的路径名以及已经读取了多少byte。
+
+```go
+type progressReader struct {
+   file         io.Reader
+   path         string
+   out          chan<- interface{}
+   bytes        int64
+   lastProgress int64
+}
+
+func (i *progressReader) Read(p []byte) (int, error) {
+   n, err := i.file.Read(p)
+
+   i.bytes += int64(n)
+   if i.bytes-i.lastProgress >= progressReaderIncrement || err == io.EOF {
+      i.lastProgress = i.bytes
+      i.out <- &coreiface.AddEvent{
+         Name:  i.path,
+         Bytes: i.bytes,
+      }
+   }
+
+   return n, err
+}
+```
+
+
+
+另外对命令行添加文件我们是开启一个协程来处理
+
+- 从events这个窗口里头循环得到结果
+- 包括这个文件的名字
+- hash
+- byte流
+- 然后把它emit发射出去
+
+
+
+```go
+for event := range events {
+      output, ok := event.(*coreiface.AddEvent)
+      if !ok {
+         return errors.New("unknown event type")
+      }
+
+      h := ""
+      if output.Path != nil {
+         h = enc.Encode(output.Path.Cid())
+      }
+
+      if !dir && name != "" {
+         output.Name = name
+      } else {
+         output.Name = path.Join(name, output.Name)
+      }
+
+      if err := res.Emit(&AddEvent{
+         Name:  output.Name,
+         Hash:  h,
+         Bytes: output.Bytes,
+         Size:  output.Size,
+      }); err != nil {
+         return err
+      }
+   }
+
+   return <-errCh
+},
 ```
