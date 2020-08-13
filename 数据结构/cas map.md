@@ -110,6 +110,7 @@ func (b *mBucket) get(r *Cache, h *mNode, hash uint32, key uint64, noset bool) (
    return true, true, n
 }
 
+// 注意mnode没有锁
 type mNode struct {
    buckets         []unsafe.Pointer // []*mBucket,注意是指针
    mask            uint32
@@ -153,6 +154,8 @@ func (n *mNode) initBucket(i uint32) *mBucket {
          return b
       }
    }
+ 
+   
     // 注意这里需要重复返回
    return (*mBucket)(atomic.LoadPointer(&n.buckets[i]))
 }

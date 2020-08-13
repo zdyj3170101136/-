@@ -28,7 +28,11 @@ bmap的优化针对的是写优化，因为只有写才需要找到空闲block�
 
 如果文件系统太大，bitmap也会过大，因此有了block group的概念。
 
+![截屏2020-08-11 下午9.10.07](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-08-11 下午9.10.07.png)
 
+- gdt存储的是每个块组的描述符。（block bitmap，inode bitmap的偏移量等等）
+
+例如现在block的大小是1KB，一个bmap完整占用一个block能标识1024*8= 8192个block，每个块组是8192K即8M，创建1G的文件系统需要划分1024/8=128个块组；
 
 - seperblock，存储每个块组的元信息（么文件系统怎么知道分了多少个块组呢？每个块组又有多少block多少inode号等等信息呢？还有，文件系统本身的属性信息如各种时间戳、block总数量和空闲数量、inode总数量和空闲数量、当前文件系统是否正常。只在0，1和3，5，7的幂次方）（为了防止超级块损坏）（文件系统元信息）
 
@@ -47,7 +51,7 @@ bmap的优化针对的是写优化，因为只有写才需要找到空闲block�
   目录的子文件名的inode号存储在其datablock中。
 
   - 对于符号链接，如果目标路径名较短则直接保存在inode中以便更快地查找，如果目标路径名较长则分配一个数据块来保存。
-  - 设备文件、FIFO和socket等特殊文件没有数据块，设备文件的主设备号和次设备号保存在inode中。
+  - 设备文件、FIFO和socket（重要）等特殊文件没有数据块，设备文件的主设备号和次设备号保存在inode中。
   - ![截屏2020-07-10 下午6.53.41](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-10 下午6.53.41.png)
 
 
@@ -98,6 +102,7 @@ bmap的优化针对的是写优化，因为只有写才需要找到空闲block�
 - **在var的data block中记录了log目录名和其inode号，通过该inode号定位到该inode所在的块组及所在的inode table，并根据该inode记录找到log的data block。**
 - **在log目录文件的data block中记录了messages文件名和对应的inode号，通过该inode号定位到该inode所在的块组及所在的inode table，并根据该inode记录找到messages的data block。**
 - **最后读取messages对应的datablock。**
+- 考虑到同步预读以及磁盘底部的cfs算法。
 
 #### 删除
 
@@ -203,4 +208,51 @@ i_count的意义是当前文件使用者（或被调用）的数量,i_link 的�
 当(2)中删除data block指针后，将无法再找到这个文件的数据；当(3)标记inode号未使用，表示该inode号可以被后续的文件重用；当(4)删除目录data block中关于该文件的记录，真正的删除文件，外界再也定位也无法看到这个文件了；当(5)标记data block为未使用后，表示开始释放空间，这些data block可以被其他文件重用。
 
 
+
+#### linux
+
+1、每个进程都有一个打开的文件描述符表（`the per-process open file descriptor table`）。
+ 2、linux系统有一个系统级别的打开文件表（`the system-wide table of open file descriptions`）。
+ 3、linux的文件系统有一个`i-node`表（`the file system i-node table`）。
+
+
+
+作者：郑尔多斯
+链接：https://www.jianshu.com/p/461c20420af6
+来源：简书
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+
+`linux`为每一个进程保存一个`open file descriptor table`，该`table`中的每条记录都保存了相关联的文件描述符的信息，比如：
+ ① 文件描述符的标识，当前仅有一个，即 `close-on-exec`
+ ② 保存了一个指向系统级别的 `open file description table`的指针。
+
+`linux`操作系统维护了一个`system-wide table of open file descriptions`，该表的每条记录包含如下信息：
+ ① 当前文件的偏移量。也就是说，如果两个文件描述符指向了相同的打开文件表，那么他们共享相同的读写偏移量。
+ ②  `open`文件时使用的标识
+ ③  `open`文件时指定的访问权限
+ ④  信号相关的结构
+ ⑤ 保存了一个指向`i-node`的指针
+
+至于最后一个`i-node`表，它也是全局唯一的。它保存了文件的类型，文件的权限，文件锁等信息。（参考《`linux/Unix`系统编程手册》第5.4节）
+
+
+
+作者：郑尔多斯
+链接：https://www.jianshu.com/p/461c20420af6
+来源：简书
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。![截屏2020-08-11 下午9.33.19](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-08-11 下午9.33.19.png)
+
+
+
+- 注意进程中存储的是系统的打开文件表
+- 而系统打开文件描述符表表示 权限，偏移量以及inode号。
+
+
+
+- 也就是说一个进程可以以不同的closeonexec形式指向相同的进程打开文件描述符。
+- 而系统的进程打开文件描述符可以指向相同的inode号。但是也许偏移量和权限不一样。
+
+
+
+![截屏2020-08-11 下午9.36.50](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-08-11 下午9.36.50.png)
 

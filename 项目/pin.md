@@ -494,7 +494,7 @@ func (p *pinner) Flush(ctx context.Context) error {
 }
 ```
 
-而所有的这种internal node，都会挂在/local/pins这个node之下。
+而所有的这种internal node，都会挂在/local/pins这个node之下。（这里应该是使用leveldb）
 
 ```
 var pinDatastoreKey = ds.NewKey("/local/pins")

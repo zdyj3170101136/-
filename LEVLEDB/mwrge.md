@@ -281,7 +281,7 @@ if batch.internalLen > db.s.o.GetWriteBuffer() && !db.s.o.GetDisableLargeBatchTr
 #### compaction
 
 - opendb的时候开启了两个协程
-- 一个叫做mcompaction（不断for循环阻塞在一个管道上， 有值发送过来就执行compaction， 然后往这个cAuto（发送一个nil）， 告诉那边完成了）
+- 一个叫做mcompaction（不断for循环阻塞在一个管道上， 有值发送过来就执行compaction， 然后往这个cAuto（发送一个nil）， 告诉那边完成了）（或许是既能同步又能异步？）
 
 - 一个叫做tcompaction（）
 

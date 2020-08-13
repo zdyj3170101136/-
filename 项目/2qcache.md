@@ -190,3 +190,17 @@ evictSize := int(float64(size) * ghostRatio)
 
 
 O（1）时间复杂度，没有复杂参数。
+
+#### evict
+
+注意recentevicted只会存储key，而没有value。
+
+
+
+am：frequent。a1:recent
+
+如果A *1*的最大大小的阈值太小，则很有可能会丢失重新引用的页面。如果阈值太高，则A *m*的大小将减小，并且只能存储较少的重新引用页面。这将影响整体性能。该方法的算法如下
+
+
+
+https://medium.com/@koushikmohan/an-analysis-of-2q-cache-replacement-algorithms-21acceae672a

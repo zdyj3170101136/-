@@ -225,8 +225,8 @@ https://segmentfault.com/a/1190000020183650
 
 #### 可靠传输
 
-- 数据校验检查比特错误
-- 肯定确认和重传机制应对模糊不清的ack
+- 数据校验和ack检查比特错误
+- 重传机制应对模糊不清的ack
 - 序号解决重传导致的重复分组问题
 - 使用定时器的超时重传机制解决数据丢失问题
 - 数据切片和pmtu探测解决mtu问题。
@@ -258,7 +258,7 @@ rwnd = 接收方应用最后一个读取的字节 - 缓存里头的字节。
 
 #### 为什么需要三次握手
 
-发送方发送SYN了， 初始序列号， 进入SYNC_SEND；接受方（LISTEN）发送SYN， ACK， 进入SYNC_ECVD， 自己的初始序列号，发送方序列号 + ！；接收方发送ACK进入ESTABLISH,发送方发送ACK也进入ESTABLISH（并且携带数据）。
+发送方发送SYN了， 初始序列号client， 进入SYNC_SEND；接受方接受到ack（LISTEN）发送SYNACK（一条报文）， 进入SYNC_ECVD， 自己的初始序列号server，发送方序列号 + 1；接收方发送ACK进入ESTABLISH,ack为server + 1，sqe = client + 1.发送方发送ACK也进入ESTABLISH（并且携带数据）。
 
 1) A --> B SYN my sequence number is X 2) A <-- B ACK your sequence number is X 3) A <-- B SYN my sequence number is Y 4) A --> B ACK your sequence number is Y
 
@@ -305,6 +305,10 @@ https://draveness.me/whys-the-design-tcp-three-way-handshake/
 没有完全三次握手
 
 #### SYNC COOKIE
+
+synack的值等于ack + 1.
+
+
 
 服务器资源在接受到发送端的ACK后才会分配资源；
 
@@ -714,6 +718,8 @@ tcp中如果关闭会有fin，对方能够得到连接断开的消息。
 - 操作系统崩溃，不会发送fin
 - 而keepalive是操作系统处理，即使进程死锁或者阻塞，依然能够正常工作。而keepalive无法。
 
+
+
 如果TCP连接中的另一方因为停电突然断网，我们并不知道连接断开，此时发送数据失败会进行重传，由于重传包的优先级要高于keepalive的数据包，因此keepalive的数据包无法发送出去。只有在长时间的重传失败之后我们才能判断此连接断开了。
 
 ![截屏2020-07-22 下午9.35.33](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-07-22 下午9.35.33.png)
@@ -721,3 +727,63 @@ tcp中如果关闭会有fin，对方能够得到连接断开的消息。
 #### tcp和udp同一端口
 
 3、TCP和UDP传输协议监听同一个端口后，接收数据互不影响，不冲突。因为数据接收时时根据五元组`{传输协议，源IP，目的IP，源端口，目的端口}`判断接受者的。
+
+#### sack
+
+https://zhuanlan.zhihu.com/p/101702312
+
+### 带选择确认的重传
+
+改进的方法就是 SACK（Selective Acknowledgment），简单来讲就是在快速重传的基础上，**返回最近收到的报文段的序列号范围**，这样客户端就知道，哪些数据包已经到达服务器了。
+
+来几个简单的示例：
+
+- case 1：第一个包丢失，剩下的 7 个包都被收到了。
+
+当收到 7 个包的**任何一个**的时候，接收方会返回一个带 SACK 选项的 ACK，告知发送方自己收到了哪些乱序包。注：**Left Edge，Right Edge 就是这些乱序包的左右边界**。
+
+```text
+Triggering    ACK      Left Edge   Right Edge
+             Segment
+
+             5000         (lost)
+             5500         5000     5500       6000
+             6000         5000     5500       6500
+             6500         5000     5500       7000
+             7000         5000     5500       7500
+             7500         5000     5500       8000
+             8000         5000     5500       8500
+             8500         5000     5500       9000
+```
+
+- case 2：第 2, 4, 6, 8 个数据包丢失。
+- 收到第一个包时，没有乱序的情况，正常回复 ACK。
+- 收到第 3, 5, 7 个包时，由于出现了乱序包，回复带 SACK 的 ACK。
+- 因为这种情况下有很多碎片段，所以相应的 Block 段也有很多组，当然，因为选项字段大小限制， Block 也有上限。
+
+```text
+Triggering  ACK    First Block   2nd Block     3rd Block
+          Segment            Left   Right  Left   Right  Left   Right
+                             Edge   Edge   Edge   Edge   Edge   Edge
+
+          5000       5500
+          5500       (lost)
+          6000       5500    6000   6500
+          6500       (lost)
+          7000       5500    7000   7500   6000   6500
+          7500       (lost)
+          8000       5500    8000   8500   7000   7500   6000   6500
+          8500       (lost)
+```
+
+不过 SACK 的规范「[RFC2018](https://link.zhihu.com/?target=https%3A//tools.ietf.org/html/rfc2018)」有点坑爹，接收方可能会在提供一个 SACK 告诉发送方这些信息后，又「食言」，也就是说，接收方可能把这些（乱序的）数据包删除掉，然后再通知发送方。以下摘自「RFC2018」：
+
+> Note that the data receiver is permitted to discard data in its queue that has not been acknowledged to the data sender, even if the data has already been reported in a SACK option. **Such discarding of SACKed packets is discouraged, but may be used if the receiver runs out of buffer space.**
+
+最后一句是说，**当接收方缓冲区快被耗尽时**，可以采取这种措施，当然并不建议这种行为。。。
+
+由于这个操作，发送方在收到 SACK 以后，也不能直接清空重传缓冲区里的数据，一直到接收方发送普通的，ACK 号大于其最大序列号的值的时候才能清除。另外，重传计时器也收到影响，重传计时器应该忽略 SACK 的影响，毕竟接收方把数据删了跟丢包没啥区别。
+
+
+
+- 需要注意的是只有收到失序的分组时才会可能会发送SACK，TCP的ACK还是建立在累积确认的基础上的。也就是说如果收到的报文段与期望收到的报文段的序号相同就会发送累积的ACK，SACK只是针对失序到达的报文段的。

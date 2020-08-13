@@ -11,7 +11,7 @@
 
 sstable 是memtable经过minor compaction生成的磁盘数据。
 
-- 避免日志文件过大
+- 避免日志文件过大（嘻嘻）
 - 降低内存使用率
 
 #### block

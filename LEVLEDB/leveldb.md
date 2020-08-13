@@ -373,6 +373,10 @@ const (
 
 
 
+- 注意sequence不同但是ukey相同的会紧密排列
+
+
+
 - 比方说，刚开始sequence为3，插入时候使用4.插入了100个数据后变成104.
 - get的时候使用104
 
@@ -414,6 +418,8 @@ const (
 // 比较的时候先比较key，如果key一样
 // 再比较num，num包括sequence序列号和操作类型
 // 序列号更小的， 或者序列号相同，delete操作更大。
+
+// 这样子来说在跳表中越小的越前。
 func (icmp *iComparer) Compare(a, b []byte) int {
    x := icmp.uCompare(internalKey(a).ukey(), internalKey(b).ukey())
    if x == 0 {
@@ -608,7 +614,7 @@ leveldb中的snapshot通过一个读写锁和链表提供。
 
 - acquireSnapshot用于back链表，返回最新的snapshotElemet
 - 因此当get的时候，使用当前的sequence生成一个snapshot，结束时侯释放。
-- 如果有多个get那么会使用相同的snapshotElement进行访问。
+- 如果有多个get那么会使用相同的snapshotElement进行访问。（如果这中间有写操作更新了sequence，那么事实上会使用最新的seq用来生成）（不过好处在于在两个write操作的间隙，都是使用一个snapshotElement就行）（对于snapshotelement就不需要原子读取）。
 
 ```go
 type snapshotElement struct {

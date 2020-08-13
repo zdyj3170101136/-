@@ -294,6 +294,7 @@ func New(capacity int) *DB {
 func (p *DB) randHeight() (h int) {
 	const branching = 4
 	h = 1 // 从1开始
+	// 注意这里表示h至少为1，最多12
 	for h < tMaxHeight && p.rnd.Int()%branching == 0 {
 		// 生成随机数，0，1，2，3。四分之一的概率增加
 		h++
@@ -369,7 +370,7 @@ func (p *DB) Put(key []byte, value []byte) error {
 	for i, n := range p.prevNode[:h] {     // 如果height为1，就只有一个节点
 		m := n + nNext + i                 // i表示高度，说明对于第n个node，它的第i位置插入一个元素
 		p.nodeData = append(p.nodeData, p.nodeData[m])  // 当前node插入在prevnode和prevnode之前的node， 至少也会有一个为0,容易忘记！！！
-		p.nodeData[m] = node // 这里也很重要，容易忘记
+		p.nodeData[m] = node // 这里也很重要，容易忘记, 也很容易搞混
 	}
 
 	p.kvSize += len(key) + len(value)       // 增加大小
@@ -393,4 +394,30 @@ func (p *DB) Get(key []byte) (value []byte, err error) {
 	p.mu.RUnlock()
 	return
 }
+
+// Find finds key/value pair whose key is greater than or equal to the
+// given key. It returns ErrNotFound if the table doesn't contain
+// such pair.
+//
+// The caller should not modify the contents of the returned slice, but
+// it is safe to modify the contents of the argument after Find returns.
+func (p *DB) Find(key []byte) (rkey, value []byte, err error) {
+   p.mu.RLock()
+   if node, _ := p.findGE(key, false); node != 0 {
+      n := p.nodeData[node]
+      m := n + p.nodeData[node+nKey]
+      rkey = p.kvData[n:m]
+      value = p.kvData[m : m+p.nodeData[node+nVal]]
+   } else {
+      err = ErrNotFound
+   }
+   p.mu.RUnlock()
+   return
+}
 ```
+
+
+
+// 注意find会返回delete，因为不在乎type
+
+- 以及find不在乎exact，而get在乎。
