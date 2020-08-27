@@ -92,7 +92,7 @@ https://blog.51cto.com/zengestudy/2132511
 
 - 然后到达了对面服务器后，可能会使用nat协议具体到对应的服务器。
 
-- ssl层两次握手建立https连接（强调dh更安全）（强调ssl关闭（必须强调））
+- ssl层四次握手建立https连接（强调dh更安全）（强调ssl关闭（必须强调））
 
   
 

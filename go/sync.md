@@ -151,6 +151,10 @@ readerwait是用来奇数writerseam。（表示写锁信号量上有多少个进
 
 
 
+- readerwait和readercount的区别
+
+
+
 然后RLOCK：readercount+ 1，表示新增一个当前读锁；
 
 如果 < 0，说明当前有写锁在等待，则挂在readerseam之上。

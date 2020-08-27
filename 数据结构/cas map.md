@@ -37,6 +37,7 @@ type mBucket struct {
    frozen bool // 使用mutex保护的变量，不用atomic
 }
 
+// freeze函数难写
 func (b *mBucket) freeze() []*Node {
    b.mu.Lock() // 注意这里也加锁，frozen就不用
    defer b.mu.Unlock()
@@ -52,6 +53,7 @@ func (b *mBucket) get(r *Cache, h *mNode, hash uint32, key uint64, noset bool) (
    b.mu.Lock()
 
    if b.frozen {
+   // 注意要判断frozen
       // 防止在getbucket和get中间已经被freeze
       b.mu.Unlock()
       return
@@ -60,7 +62,7 @@ func (b *mBucket) get(r *Cache, h *mNode, hash uint32, key uint64, noset bool) (
    // Scan the node.
    for _, n := range b.node {
       if n.hash == hash  && n.key == key {
-         b.mu.Unlock()
+         b.mu.Unlock() // 注意要解锁
          return true, false, n
       }
    }
@@ -83,14 +85,18 @@ func (b *mBucket) get(r *Cache, h *mNode, hash uint32, key uint64, noset bool) (
 
    // Update counter.
    grow := atomic.AddInt32(&r.nodes, 1) >= h.growThreshold // cache里头存储node的总数
+   // 注意growThreshold无需atomic
 
+// atomic操作需要指针
    // Grow.
    // 这样，旧的mnode是1，就无法对它进行resize。
+   // cas的时候要知道类型，比如说int32等等
    if grow && atomic.CompareAndSwapInt32(&h.resizeInProgess, 0, 1) {
       // 避免已经有resize正在进行中
 
       // 生成一个新的mnode，并且用cas操作改变cache的指向
       // 旧的cas
+      // nh表示new head
       nhLen := len(h.buckets) << 1 // node height len
       nh := &mNode{
          buckets:         make([]unsafe.Pointer, nhLen),
@@ -99,6 +105,7 @@ func (b *mBucket) get(r *Cache, h *mNode, hash uint32, key uint64, noset bool) (
          growThreshold:   int32(nhLen * mOverflowThreshold),
       }
 
+// 注意变成unsafe指针
       ok := atomic.CompareAndSwapPointer(&r.mHead, unsafe.Pointer(h), unsafe.Pointer(nh))
       if !ok {
          panic("BUG: failed swapping head")
@@ -127,6 +134,7 @@ func (n *mNode) initBucket(i uint32) *mBucket {
       return b
    }
 
+// 注意先读取prev，再读取prev的bucket
    p := (*mNode)(atomic.LoadPointer(&n.pred))
    // 读取之前的node的mask
    if p != nil {
@@ -151,6 +159,7 @@ func (n *mNode) initBucket(i uint32) *mBucket {
       b := &mBucket{node: node}
       // 同样是cas操作，防止中间已经有了变化
       if atomic.CompareAndSwapPointer(&n.buckets[i], nil, unsafe.Pointer(b)) {
+      // 注意如果交换成功了可以直接返回
          return b
       }
    }
@@ -184,7 +193,9 @@ func NewCache() *Cache {
    }
    for i := range h.buckets {
       h.buckets[i] = unsafe.Pointer(&mBucket{})
-   }
+   } 
+   // 注意这里要初始化，不然凉凉
+   // cache指向mhead，mead指向bucket和prev。
    r := &Cache{
       mHead:  unsafe.Pointer(h),
    }
@@ -192,6 +203,8 @@ func NewCache() *Cache {
 }
 
 // 这里使用原子操作是因为get的时候生成新的mhead会动态改变，包括mbucket
+// getbucket会忘
+// 通过hash获得对应的bucket
 func (r *Cache) getBucket(hash uint32) (*mNode, *mBucket) {
    h := (*mNode)(atomic.LoadPointer(&r.mHead))
    i := hash & h.mask
@@ -216,7 +229,7 @@ func (r *Cache) Get(ns, key uint64, setFunc func() (value Value)) *Handle {
    for {
       h, b := r.getBucket(hash)
       done, _, n := b.get(r, h, hash, key, setFunc == nil)
-      if done {
+      if done { // 主要一个for循环不断的获取
          if n != nil {
             n.mu.Lock() // 多个get会遇到同一个node，使用mutex对node的值的修改并发
             if n.value == nil {
@@ -323,3 +336,7 @@ func murmur32(ns, key uint64, seed uint32) uint32 {
    return h
 }
 ```
+
+
+
+注意key为uint32，hash为uint64

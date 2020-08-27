@@ -2,6 +2,67 @@
 
 
 
+log所写的数据
+
+表示batchdata。
+
+betchdata：
+
+data：keytype（一字节）+ varintlen（lenkey）+key + varintlen（lenvalue）+ value
+
+- 只包括batch的key + type和value部分还有len长度
+- 不包括sequence（和skiplist的不同）
+
+```go
+func writeBatchesWithHeader(wr io.Writer, batches []*Batch, seq uint64) error {
+   if _, err := wr.Write(encodeBatchHeader(nil, seq, batchesLen(batches))); err != nil {
+      return err
+   }
+   for _, batch := range batches {
+      if _, err := wr.Write(batch.data); err != nil {
+         return err
+      }
+   }
+   return nil
+}
+```
+
+```go
+// Batch is a write batch.
+type Batch struct {
+   data  []byte
+   index []batchIndex
+
+   // internalLen is sums of key/value pair length plus 8-bytes internal key.
+   internalLen int
+}
+```
+
+
+
+- 而这两个函数返回的都是纯的的key和value
+
+```go
+func (index batchIndex) k(data []byte) []byte {
+   return data[index.keyPos : index.keyPos+index.keyLen]
+}
+
+func (index batchIndex) v(data []byte) []byte {
+   if index.valueLen != 0 {
+      return data[index.valuePos : index.valuePos+index.valueLen]
+   }
+   return nil
+}
+```
+
+```go
+type batchIndex struct {
+   keyType            keyType
+   keyPos, keyLen     int
+   valuePos, valueLen int
+}
+```
+
 #### 删除日志
 
 而新生成的immutable memory db则会由后台的minor compaction进程将其转换成一个sstable文件进行持久化，持久化完成，与之对应的frozen log被删除。（持久化完成后，对应的frozen log会被删除）

@@ -314,6 +314,7 @@ for i, index := range b.index {
 - 而且keysize也不是varint，而就是len（），也就是int。
 - 这里的varint keysize应该指的是batch编码后的结果。
 - 但此时batch操作不是internal key。
+- 注意sequence依然递增
 
 ```go
 func (b *Batch) putMem(seq uint64, mdb *memdb.DB) error {
@@ -330,9 +331,9 @@ func (b *Batch) putMem(seq uint64, mdb *memdb.DB) error {
 
 http://huntinux.github.io/leveldb-skiplist.html
 
-![img](https://leveldb-handbook.readthedocs.io/zh/latest/_images/internalkey.jpeg)
+![截屏2020-08-20 上午11.48.23](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-08-20 上午11.48.23.png)
 
-![img](http://img.blog.itpub.net/blog/2019/01/10/20236399a91871de.jpeg?x-oss-process=style/bb)
+
 
 因此相同的key在跳表中的位置相同，而get会获取最大的sequence。
 
@@ -340,7 +341,7 @@ http://huntinux.github.io/leveldb-skiplist.html
 
 - 通过这样的比较规则，则所有的数据项首先按照用户key进行升序排列；
 - 当用户key一致时，按照序列号进行降序排列，这样可以保证首先读到序列号大的数据项。
-- 序列号一致的时候，put操作会在前面。
+- 序列号一致的时候，put操作会在前面。（事实上不存在）
 
 
 
@@ -369,26 +370,29 @@ const (
 
 - 比较key的大小，key字节序更大的在更后面
 - key相同，比较sequence，sequence更大的会在前面。
-- sequence相同，put操作会在前面
+- sequence相同，put操作会在前面（事实上不存在）
 
 
 
-- 注意sequence不同但是ukey相同的会紧密排列
+- 如果对同一个key插入多个type，则后插入的sequence会比较大，排列在前面
+- 因此以最晚插入的为准。
 
 
 
-- 比方说，刚开始sequence为3，插入时候使用4.插入了100个数据后变成104.
-- get的时候使用104
+- 注意sequence不同但是ukey相同的会紧密排列， 然后内部按照sequence递增
+- 返回不大于sequence的数据
+
+
+
+- 比方说，刚开始内存sequence为3，插入时候使用4.插入了100个数据后内存中变成103.
+- 第一个插入的数据使用4，第100个插入的数据使用103。
+- get的时候使用103
 
 
 
 - 而find操作会返回大于当前key的值。
 
 - 具体来说就是sequence第一个小于。
-
-- 由于put操作会在前面，则先返回put操作
-
-- 先返回put操作（add wins）
 
 - 而如果发现type为delete就返回errnotfound
 
@@ -404,7 +408,7 @@ const (
      if node, _ := p.findGE(key, false); node != 0 {
         n := p.nodeData[node]
         m := n + p.nodeData[node+nKey]
-        rkey = p.kvData[n:m]
+        rkey = p.kvData[n:m] // 注意要返回key
         value = p.kvData[m : m+p.nodeData[node+nVal]]
      } else {
         err = ErrNotFound
@@ -719,3 +723,8 @@ func (snap *Snapshot) Get(key []byte, ro *opt.ReadOptions) (value []byte, err er
    return snap.db.get(nil, nil, key, snap.elem.seq, ro)
 }
 ```
+
+
+
+
+

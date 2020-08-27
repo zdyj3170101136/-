@@ -205,7 +205,7 @@ func (o *Options) GetWriteL0SlowdownTrigger() int {
 
 #### sstable元数据
 
-- 最大和最小的key
+- 最大和最小的ikey
 - sstable的大小
 - 文件句柄
 - 还有一个seekLeft（文件大小除以16kb，最多无效读取次数）

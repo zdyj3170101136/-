@@ -395,7 +395,7 @@ ps -aux 所有信息
 
 ![截屏2020-06-21 下午9.02.55](/Users/jieyang/Library/Application Support/typora-user-images/截屏2020-06-21 下午9.02.55.png)
 
-User 拥有者 | pid |  CPU cpu占用百分比 物理内存百分比 虚拟内存 实际物理内存 | stat 状态（s表示高优先级） ｜ 启动时间 ｜ 已运行时间 ｜ 启动时候的命令
+User 拥有者 | pid |  CPU cpu占用百分比 物理内存百分比 虚拟内存 实际物理内存 | stat 状态 ｜ 启动时间 ｜ 已运行时间 ｜ 启动时候的命令
 
 TT （依赖于哪个终端）
 

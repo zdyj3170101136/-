@@ -310,7 +310,7 @@ func (p *DB) findGE(key []byte, prev bool) (int, bool) {
 	for {
 
 		next := p.nodeData[node+nNext+h]
-		cmp := 1                      // 说明默认高度减小（包括当前无指针的时候）
+		cmp := 1                      // 说明默认高度减小（包括当前无指针的时候）， 这里总是忘
 		if next != 0 {                // next不为零，说明此时指针不为空
 			o := p.nodeData[next]     // 从h高度的指针的nodedata取出key的长度，我们知道【0，1）长度为1，然后比较大小
 			cmp = bytes.Compare(p.kvData[o:o+p.nodeData[next+nKey]], key)
@@ -367,7 +367,7 @@ func (p *DB) Put(key []byte, value []byte) error {
 	// Node
 	node := len(p.nodeData)                // 在nodedata末尾添加元数据和生成的随机高度
 	p.nodeData = append(p.nodeData, kvOffset, len(key), len(value), h)   // 对于新节点，添加在后面
-	for i, n := range p.prevNode[:h] {     // 如果height为1，就只有一个节点
+	for i, n := range p.prevNode[:h] {     // 如果height为1，就只有一个节点, 注意以h作为最高
 		m := n + nNext + i                 // i表示高度，说明对于第n个node，它的第i位置插入一个元素
 		p.nodeData = append(p.nodeData, p.nodeData[m])  // 当前node插入在prevnode和prevnode之前的node， 至少也会有一个为0,容易忘记！！！
 		p.nodeData[m] = node // 这里也很重要，容易忘记, 也很容易搞混
@@ -404,6 +404,7 @@ func (p *DB) Get(key []byte) (value []byte, err error) {
 func (p *DB) Find(key []byte) (rkey, value []byte, err error) {
    p.mu.RLock()
    if node, _ := p.findGE(key, false); node != 0 {
+   // 注意必须为false，不然会gg
       n := p.nodeData[node]
       m := n + p.nodeData[node+nKey]
       rkey = p.kvData[n:m]
@@ -421,3 +422,9 @@ func (p *DB) Find(key []byte) (rkey, value []byte, err error) {
 // 注意find会返回delete，因为不在乎type
 
 - 以及find不在乎exact，而get在乎。
+
+
+
+- p.nodeData[next] 表示key的偏移量
+- p.nodeData[next+nKey]表示key的长度
+- p.nodeData[node+nVal]表示value的长度

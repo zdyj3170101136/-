@@ -102,6 +102,7 @@ func (t *Tree) insert(node *Node, key int,  priority int) *Node {
       node.left = t.insert(node.left, key,  priority)
       if node.left.priority < node.priority {
          return t.leftRotate(node)
+         // 注意这里直接return了哈哈
       }
       return node
    }

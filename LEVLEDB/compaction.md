@@ -188,7 +188,7 @@
 
 
 
-- 如果lastseq小于minsequence，那么就丢掉。（因为已经有了一个更新的了）（不管是put还是delete）
+- 如果lastseq小于等于minsequence，那么就丢掉。（因为已经有了一个更新的了）（不管是put还是delete）
 
 这里一方面是说，在sequence相同的时候，已经有了一个key添加到里头去了。
 
@@ -196,6 +196,10 @@
 
 - 更新lastseq为当前的sequence
 - fallthourg会不去判断条件而执行下一条指令
+
+
+
+- 感觉是｜｜操作
 
 
 
@@ -209,7 +213,7 @@
 
 - 如果出现了一个delete。
 
-- 并且sequence小于当前活跃的最小的sequence
+- 并且delete的sequence小于当前活跃的最小的sequence（而不是lastseq）
 - 并且更高层没有这个key
 - 丢弃这个delete操作
 - 这说明这个delete操作没有用了。
